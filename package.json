@@ -1,0 +1,21 @@
+{
+  "name": "invest-codex",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "stop": "sh -c 'for p in 7100 7001 7000 3000 5173; do lsof -ti tcp:$p | xargs kill -9 2>/dev/null || true; done'",
+    "dev:reset": "npm run dev",
+    "dev": "npm run stop && concurrently -k -n api,web -c blue,green \"npm run dev:api\" \"npm run dev:web\"",
+    "dev:api": "npm run dev -w @invest/api",
+    "dev:web": "npm run dev -w @invest/web",
+    "build": "npm run build -w @invest/api && npm run build -w @invest/web",
+    "typecheck": "npm run typecheck -w @invest/api && npm run typecheck -w @invest/web"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  },
+  "packageManager": "pnpm@10.30.3+sha512.c961d1e0a2d8e354ecaa5166b822516668b7f44cb5bd95122d590dd81922f606f5473b6d23ec4a5be05e7fcd18e8488d47d978bbe981872f1145d06e9a740017"
+}
