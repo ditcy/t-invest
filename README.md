@@ -61,10 +61,24 @@ If T-Bank requests fail with `SELF_SIGNED_CERT_IN_CHAIN`, prefer:
 NODE_EXTRA_CA_CERTS=/path/to/ca.pem npm run dev
 ```
 
+Or use a dedicated command (defaults to `./certs/ca.pem`, can be overridden):
+
+```bash
+npm run dev:ca
+# or
+NODE_EXTRA_CA_CERTS=/absolute/path/to/ca.pem npm run dev:ca
+```
+
 Fallback for local-only debugging:
 
 ```bash
 NODE_TLS_REJECT_UNAUTHORIZED=0 npm run dev
+```
+
+or:
+
+```bash
+npm run dev:insecure
 ```
 
 `npm run dev` now auto-cleans occupied ports (`7100/7001`, plus old `7000/3000/5173`) before start.

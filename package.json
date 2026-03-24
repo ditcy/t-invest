@@ -9,6 +9,8 @@
     "stop": "sh -c 'for p in 7100 7001 7000 3000 5173; do lsof -ti tcp:$p | xargs kill -9 2>/dev/null || true; done'",
     "dev:reset": "npm run dev",
     "dev": "npm run stop && concurrently -k -n api,web -c blue,green \"npm run dev:api\" \"npm run dev:web\"",
+    "dev:ca": "NODE_EXTRA_CA_CERTS=${NODE_EXTRA_CA_CERTS:-./certs/ca.pem} npm run dev",
+    "dev:insecure": "NODE_TLS_REJECT_UNAUTHORIZED=0 npm run dev",
     "dev:api": "npm run dev -w @invest/api",
     "dev:web": "npm run dev -w @invest/web",
     "build": "npm run build -w @invest/api && npm run build -w @invest/web",
