@@ -30,6 +30,13 @@ Ports:
 
 `npm run dev` already kills stale processes on `7100`, `7001`, `7000`, `3000`, `5173`.
 
+## Cross-platform (Windows & macOS)
+
+When you add or change **npm scripts**, **tooling**, or anything that looks like a shell one-liner, keep **Windows and macOS** in mind (npm on Windows runs scripts through `cmd.exe`, not Bash).
+
+- Prefer portable patterns: `cross-env` for environment variables, packages like `kill-port` or small Node scripts instead of `sh`/`lsof`/`xargs`, and runners like `tsx` instead of Bash-only `node --import 'data:…'` quoting.
+- Avoid Unix-only syntax in scripts (`VAR=value command`, `${VAR:-default}`, single-quoted multi-part arguments) unless you document a WSL/Git-Bash-only workflow.
+
 ## Environment
 
 The root `.env` is the source of truth. Use `.env.example` as a template.
