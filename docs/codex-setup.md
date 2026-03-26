@@ -48,6 +48,7 @@ NODE_TLS_REJECT_UNAUTHORIZED=0 npm run dev
 3. In `Instrument Search`, type `sber` or `mvi`.
 4. Pick a suggestion from the T-Bank-backed dropdown.
 5. Click `Run Backtest`.
+6. Open the saved run from the `Saved Runs` block or the `View saved page` link.
 
 ## Main Scripts
 
@@ -69,6 +70,8 @@ NODE_TLS_REJECT_UNAUTHORIZED=0 npm run dev
 
 - Strategy workspace with saved versions
 - Deterministic MA crossover backtest
+- Saved backtest runs with a dedicated detail page for version, parameters, and report
+- Candlestick chart with trade markers on the current report and saved run page
 - Candle sync from T-Bank REST proxy
 - Instrument search with recent-memory dropdown
 - LLM Copilot with `mock` and optional `claude` providers

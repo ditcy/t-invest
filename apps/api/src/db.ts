@@ -65,6 +65,16 @@ export const initDb = async () => {
       created_at timestamptz not null default now()
     );
   `);
+
+  await pool.query(`
+    alter table backtest_runs
+    add column if not exists run_params jsonb not null default '{}'::jsonb;
+  `);
+
+  await pool.query(`
+    alter table backtest_runs
+    add column if not exists candles_count int;
+  `);
 };
 
 export const closeDb = async () => {

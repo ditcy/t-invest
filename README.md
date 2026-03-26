@@ -19,6 +19,8 @@ Use these files first:
 - First strategy auto-seed on API start (if DB has no strategies yet)
 - Candle ingestion from T-Bank REST proxy with interval windowing and cache in Postgres
 - Deterministic MA crossover backtest with fees/slippage model
+- Persisted backtest runs with run parameters and a saved detail page per run
+- Candlestick chart for each run with BUY/SELL markers from the trade log
 - Accounts API (proxy to T-Bank users service)
 - T-Bank-backed instrument search with recent-memory dropdown
 - UI for saving strategy versions, syncing candles, running backtests, and querying LLM providers
@@ -111,6 +113,7 @@ npm run dev:web
 - `GET /api/strategies`
 - `GET /api/strategies/:strategyId/versions`
 - `POST /api/backtests`
+- `GET /api/backtests?limit=8&strategyId=...&strategyVersionId=...`
 - `GET /api/backtests/:backtestId`
 
 ## Plan

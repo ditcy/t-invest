@@ -76,6 +76,12 @@ const startBacktestSchema = z.object({
   env: envSchema.default("sandbox")
 });
 
+const backtestsQuerySchema = z.object({
+  strategyId: z.string().uuid().optional(),
+  strategyVersionId: z.string().uuid().optional(),
+  limit: z.coerce.number().int().min(1).max(50).default(12)
+});
+
 const llmProviderSchema = z.enum(["mock", "claude"]);
 
 const llmChatSchema = z.object({
@@ -84,6 +90,100 @@ const llmChatSchema = z.object({
   prompt: z.string().min(1),
   systemPrompt: z.string().optional()
 });
+
+type StoredRunParams = Partial<z.infer<typeof startBacktestSchema>>;
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const toIsoString = (value: unknown) => {
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+
+  if (typeof value === "string") {
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? value : parsed.toISOString();
+  }
+
+  return "";
+};
+
+const toNumber = (value: unknown) => {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "string" && value.trim().length > 0) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  return null;
+};
+
+const getModelBps = (value: unknown) => {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  return toNumber(value.bps);
+};
+
+const getCandlesCount = (candlesCount: unknown, report: unknown) => {
+  const directCount = toNumber(candlesCount);
+  if (directCount !== null) {
+    return directCount;
+  }
+
+  if (!isRecord(report) || !Array.isArray(report.equityCurve)) {
+    return null;
+  }
+
+  return report.equityCurve.length;
+};
+
+const normalizeRunParams = (input: {
+  strategyVersionId: string;
+  runParams: unknown;
+  fromTs: unknown;
+  toTs: unknown;
+  interval: string;
+  instruments: string[];
+  feesModel: unknown;
+  slippageModel: unknown;
+  metrics: unknown;
+}) => {
+  const params = isRecord(input.runParams) ? (input.runParams as StoredRunParams) : {};
+  const metrics = isRecord(input.metrics) ? input.metrics : {};
+  const instrumentId =
+    typeof params.instrumentId === "string" && params.instrumentId.length > 0
+      ? params.instrumentId
+      : (input.instruments[0] ?? "");
+
+  const interval =
+    typeof params.interval === "string" && candleIntervals.includes(params.interval as (typeof candleIntervals)[number])
+      ? params.interval
+      : input.interval;
+
+  return {
+    strategyVersionId: input.strategyVersionId,
+    instrumentId,
+    interval,
+    from:
+      typeof params.from === "string" && params.from.length > 0
+        ? params.from
+        : toIsoString(input.fromTs),
+    to:
+      typeof params.to === "string" && params.to.length > 0
+        ? params.to
+        : toIsoString(input.toTs),
+    feesBps: toNumber(params.feesBps) ?? getModelBps(input.feesModel),
+    slippageBps: toNumber(params.slippageBps) ?? getModelBps(input.slippageModel),
+    initialCash: toNumber(params.initialCash) ?? toNumber(metrics.startEquity),
+    env: params.env === "sandbox" || params.env === "prod" ? params.env : null
+  };
+};
 
 app.get("/api/health", async (_req: Request, res: Response, next: NextFunction) => {
   try {
@@ -308,6 +408,112 @@ app.post("/api/strategies", async (req: Request, res: Response, next: NextFuncti
   }
 });
 
+app.get("/api/backtests", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const parsed = backtestsQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.flatten() });
+      return;
+    }
+
+    const conditions: string[] = [];
+    const values: Array<string | number> = [];
+
+    if (parsed.data.strategyId) {
+      values.push(parsed.data.strategyId);
+      conditions.push(`sv.strategy_id = $${values.length}`);
+    }
+
+    if (parsed.data.strategyVersionId) {
+      values.push(parsed.data.strategyVersionId);
+      conditions.push(`br.strategy_version_id = $${values.length}`);
+    }
+
+    values.push(parsed.data.limit);
+
+    const whereClause = conditions.length > 0 ? `where ${conditions.join(" and ")}` : "";
+
+    const result = await pool.query<{
+      backtest_id: string;
+      status: string;
+      created_at: Date;
+      strategy_id: string;
+      strategy_name: string;
+      strategy_version_id: string;
+      strategy_version: number;
+      metrics: unknown;
+      error: string | null;
+      run_params: unknown;
+      from_ts: Date;
+      to_ts: Date;
+      candle_interval: string;
+      instruments: string[];
+      fees_model: unknown;
+      slippage_model: unknown;
+      candles_count: number | null;
+    }>(
+      `
+      select br.id as backtest_id,
+             br.status,
+             br.created_at,
+             br.strategy_version_id,
+             br.metrics,
+             br.error,
+             br.run_params,
+             br.from_ts,
+             br.to_ts,
+             br.candle_interval,
+             br.instruments,
+             br.fees_model,
+             br.slippage_model,
+             br.candles_count,
+             sv.strategy_id,
+             sv.version as strategy_version,
+             s.name as strategy_name
+      from backtest_runs br
+      join strategy_versions sv on sv.id = br.strategy_version_id
+      join strategies s on s.id = sv.strategy_id
+      ${whereClause}
+      order by br.created_at desc
+      limit $${values.length}
+      `,
+      values
+    );
+
+    res.json({
+      backtests: result.rows.map((row) => ({
+        backtestId: row.backtest_id,
+        status: row.status,
+        createdAt: toIsoString(row.created_at),
+        candlesCount: getCandlesCount(row.candles_count, null),
+        error: row.error,
+        strategy: {
+          strategyId: row.strategy_id,
+          name: row.strategy_name
+        },
+        strategyVersion: {
+          strategyVersionId: row.strategy_version_id,
+          version: row.strategy_version
+        },
+        runParams: normalizeRunParams({
+          strategyVersionId: row.strategy_version_id,
+          runParams: row.run_params,
+          fromTs: row.from_ts,
+          toTs: row.to_ts,
+          interval: row.candle_interval,
+          instruments: row.instruments,
+          feesModel: row.fees_model,
+          slippageModel: row.slippage_model,
+          metrics: row.metrics
+        }),
+        metrics: isRecord(row.metrics) ? row.metrics : null
+      }))
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.post("/api/backtests", async (req: Request, res: Response, next: NextFunction) => {
   try {
     const payload = startBacktestSchema.parse(req.body);
@@ -376,6 +582,8 @@ app.post("/api/backtests", async (req: Request, res: Response, next: NextFunctio
         instruments,
         fees_model,
         slippage_model,
+        run_params,
+        candles_count,
         metrics,
         report
       )
@@ -390,7 +598,9 @@ app.post("/api/backtests", async (req: Request, res: Response, next: NextFunctio
         $7::jsonb,
         $8::jsonb,
         $9::jsonb,
-        $10::jsonb
+        $10,
+        $11::jsonb,
+        $12::jsonb
       )
       `,
       [
@@ -402,6 +612,8 @@ app.post("/api/backtests", async (req: Request, res: Response, next: NextFunctio
         [payload.instrumentId],
         JSON.stringify({ model: "constant_bps", bps: payload.feesBps }),
         JSON.stringify({ model: "constant_bps", bps: payload.slippageBps }),
+        JSON.stringify(payload),
+        candles.length,
         JSON.stringify(report.metrics),
         JSON.stringify(report)
       ]
@@ -422,11 +634,57 @@ app.get("/api/backtests/:backtestId", async (req: Request, res: Response, next: 
   try {
     const backtestId = z.string().uuid().parse(req.params.backtestId);
 
-    const result = await pool.query(
+    const result = await pool.query<{
+      backtest_id: string;
+      strategy_version_id: string;
+      status: string;
+      created_at: Date;
+      from_ts: Date;
+      to_ts: Date;
+      candle_interval: string;
+      instruments: string[];
+      fees_model: unknown;
+      slippage_model: unknown;
+      run_params: unknown;
+      candles_count: number | null;
+      metrics: unknown;
+      report: unknown;
+      error: string | null;
+      strategy_id: string;
+      strategy_name: string;
+      strategy_version: number;
+      strategy_version_created_at: Date;
+      strategy_code: string;
+      strategy_params: StrategyParams;
+      strategy_risk_config: Record<string, unknown>;
+    }>(
       `
-      select id, strategy_version_id, status, created_at, metrics, report
-      from backtest_runs
-      where id = $1
+      select br.id as backtest_id,
+             br.strategy_version_id,
+             br.status,
+             br.created_at,
+             br.from_ts,
+             br.to_ts,
+             br.candle_interval,
+             br.instruments,
+             br.fees_model,
+             br.slippage_model,
+             br.run_params,
+             br.candles_count,
+             br.metrics,
+             br.report,
+             br.error,
+             sv.strategy_id,
+             sv.version as strategy_version,
+             sv.created_at as strategy_version_created_at,
+             sv.code as strategy_code,
+             sv.params as strategy_params,
+             sv.risk_config as strategy_risk_config,
+             s.name as strategy_name
+      from backtest_runs br
+      join strategy_versions sv on sv.id = br.strategy_version_id
+      join strategies s on s.id = sv.strategy_id
+      where br.id = $1
       limit 1
       `,
       [backtestId]
@@ -438,7 +696,40 @@ app.get("/api/backtests/:backtestId", async (req: Request, res: Response, next: 
       return;
     }
 
-    res.json({ backtest: row });
+    res.json({
+      backtest: {
+        backtestId: row.backtest_id,
+        status: row.status,
+        createdAt: toIsoString(row.created_at),
+        candlesCount: getCandlesCount(row.candles_count, row.report),
+        error: row.error,
+        strategy: {
+          strategyId: row.strategy_id,
+          name: row.strategy_name
+        },
+        strategyVersion: {
+          strategyVersionId: row.strategy_version_id,
+          version: row.strategy_version,
+          createdAt: toIsoString(row.strategy_version_created_at),
+          code: row.strategy_code,
+          params: row.strategy_params,
+          riskConfig: row.strategy_risk_config
+        },
+        runParams: normalizeRunParams({
+          strategyVersionId: row.strategy_version_id,
+          runParams: row.run_params,
+          fromTs: row.from_ts,
+          toTs: row.to_ts,
+          interval: row.candle_interval,
+          instruments: row.instruments,
+          feesModel: row.fees_model,
+          slippageModel: row.slippage_model,
+          metrics: row.metrics
+        }),
+        metrics: isRecord(row.metrics) ? row.metrics : null,
+        report: isRecord(row.report) ? row.report : null
+      }
+    });
   } catch (error) {
     next(error);
   }

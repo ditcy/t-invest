@@ -1,10 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   api,
+  type ApiBacktestRunResponse,
+  type ApiBacktestSummary,
+  type ApiCandleRequest,
   type ApiInstrumentSearchResult,
+  type ApiStrategyCreateRequest,
   type LlmProvider,
   type LlmProviderOption
 } from "./api";
+import { BacktestRunPage } from "./components/BacktestRunPage";
+import { BacktestCandlesPanel } from "./components/BacktestCandlesPanel";
+import { BacktestReportView } from "./components/BacktestReportView";
 import {
   SearchDropdown,
   type SearchDropdownOption
@@ -12,38 +19,9 @@ import {
 
 type Env = "sandbox" | "prod";
 
-type BacktestResult = {
-  backtestId: string;
-  candlesCount: number;
-  report: {
-    metrics: {
-      startEquity: number;
-      endEquity: number;
-      returnPct: number;
-      maxDrawdownPct: number;
-      tradesCount: number;
-      winRatePct: number;
-    };
-    trades: Array<{ side: string; ts: string; price: number; qty: number; fee: number; pnl?: number }>;
-  };
-};
-
-const reportMetricHelp = {
-  Return: "Portfolio return for the full backtest period: (end equity - start equity) / start equity.",
-  "Max DD": "Maximum drawdown: the largest drop in equity from a previous peak during the test.",
-  Trades: "Total trade log entries. In the current implementation this counts both BUY and SELL rows.",
-  "Win Rate": "Share of profitable SELL trades among all SELL trades.",
-  "End Equity": "Final portfolio value after all trades, fees, slippage, and forced close of any open position."
-} satisfies Record<string, string>;
-
-const tradeColumnHelp = {
-  Side: "Trade direction: BUY opens a position, SELL closes it.",
-  Time: "Timestamp of the candle where the moving-average signal triggered the trade.",
-  Price: "Execution price after slippage is applied.",
-  Qty: "Quantity bought or sold. Rounded down to fit available cash.",
-  Fee: "Commission charged for this trade.",
-  PnL: "Realized profit or loss on SELL. BUY rows do not have realized PnL yet."
-} satisfies Record<string, string>;
+type AppRoute =
+  | { name: "workspace" }
+  | { name: "backtest"; backtestId: string };
 
 const fallbackProviderOptions: LlmProviderOption[] = [
   { provider: "mock", models: ["mock-echo-v1"], enabled: true },
@@ -73,13 +51,29 @@ export const strategy = {
 };
 `;
 
+const defaultRiskConfig = {
+  maxPositionNotional: 500_000,
+  killSwitchEnabled: true
+} satisfies Record<string, unknown>;
+
 const instrumentRecentStorageKey = "invest-codex:recent-instruments";
 
-const toInstrumentOption = (instrument: ApiInstrumentSearchResult): SearchDropdownOption => ({
+const parseRoute = (pathname: string): AppRoute => {
+  const match = pathname.match(/^\/backtests\/([0-9a-f-]+)$/i);
+  if (match?.[1]) {
+    return { name: "backtest", backtestId: match[1] };
+  }
+
+  return { name: "workspace" };
+};
+
+const toInstrumentOption = (
+  instrument: ApiInstrumentSearchResult
+): SearchDropdownOption => ({
   id: instrument.instrumentId,
   label:
     instrument.ticker && instrument.name
-      ? `${instrument.ticker} · ${instrument.name}`
+      ? `${instrument.ticker} - ${instrument.name}`
       : instrument.name || instrument.ticker || instrument.instrumentId,
   description: [
     instrument.classCode || null,
@@ -88,7 +82,7 @@ const toInstrumentOption = (instrument: ApiInstrumentSearchResult): SearchDropdo
     instrument.figi ? `figi ${instrument.figi}` : null
   ]
     .filter((part): part is string => Boolean(part))
-    .join(" · ")
+    .join(" - ")
 });
 
 const fallbackInstrumentOption = (instrumentId: string): SearchDropdownOption => ({
@@ -98,11 +92,16 @@ const fallbackInstrumentOption = (instrumentId: string): SearchDropdownOption =>
 });
 
 export default function App() {
+  const [route, setRoute] = useState<AppRoute>(() => parseRoute(window.location.pathname));
+
   const [env, setEnv] = useState<Env>("sandbox");
-  const [accounts, setAccounts] = useState<Array<{ accountId: string; name: string; type: string; status: string }>>([]);
+  const [accounts, setAccounts] = useState<
+    Array<{ accountId: string; name: string; type: string; status: string }>
+  >([]);
   const [strategyId, setStrategyId] = useState<string | undefined>();
   const [strategyVersionId, setStrategyVersionId] = useState<string | undefined>();
   const [version, setVersion] = useState<number | undefined>();
+  const [savedStrategyFingerprint, setSavedStrategyFingerprint] = useState<string | null>(null);
 
   const [strategyName, setStrategyName] = useState("MA Crossover MVP");
   const [code, setCode] = useState(strategyTemplate);
@@ -133,7 +132,12 @@ export default function App() {
   const [llmLoading, setLlmLoading] = useState(false);
 
   const [candlesCount, setCandlesCount] = useState<number | null>(null);
-  const [result, setResult] = useState<BacktestResult | null>(null);
+  const [result, setResult] = useState<ApiBacktestRunResponse | null>(null);
+  const [lastBacktestCandleRequest, setLastBacktestCandleRequest] =
+    useState<ApiCandleRequest | null>(null);
+  const [recentBacktests, setRecentBacktests] = useState<ApiBacktestSummary[]>([]);
+  const [recentBacktestsLoading, setRecentBacktestsLoading] = useState(false);
+  const [recentBacktestsError, setRecentBacktestsError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -150,6 +154,34 @@ export default function App() {
     [llmOptions, llmProvider]
   );
 
+  const strategyDefinition = useMemo(
+    () => ({
+      name: strategyName,
+      code,
+      params: {
+        kind: "ma_crossover" as const,
+        shortPeriod,
+        longPeriod,
+        positionSize
+      },
+      riskConfig: defaultRiskConfig
+    }),
+    [code, longPeriod, positionSize, shortPeriod, strategyName]
+  );
+
+  const strategyFingerprint = useMemo(
+    () => JSON.stringify(strategyDefinition),
+    [strategyDefinition]
+  );
+
+  const isStrategyDirty = useMemo(() => {
+    if (!strategyVersionId || !savedStrategyFingerprint) {
+      return true;
+    }
+
+    return savedStrategyFingerprint !== strategyFingerprint;
+  }, [savedStrategyFingerprint, strategyFingerprint, strategyVersionId]);
+
   const selectedInstrumentCaption = useMemo(() => {
     if (selectedInstrument) {
       return selectedInstrument.description || `id ${selectedInstrument.id}`;
@@ -161,6 +193,17 @@ export default function App() {
 
     return "Type ticker, name, UID, or FIGI and pick a suggestion.";
   }, [instrumentId, selectedInstrument]);
+
+  useEffect(() => {
+    const onPopState = () => {
+      setRoute(parseRoute(window.location.pathname));
+    };
+
+    window.addEventListener("popstate", onPopState);
+    return () => {
+      window.removeEventListener("popstate", onPopState);
+    };
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -179,6 +222,7 @@ export default function App() {
         if (!isMounted) {
           return;
         }
+
         setLlmOptions(fallbackProviderOptions);
         setLlmProvider("mock");
         setLlmModel("mock-echo-v1");
@@ -201,6 +245,42 @@ export default function App() {
       setLlmModel(activeProviderModels[0] ?? "");
     }
   }, [activeProviderModels, llmModel]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadRecentBacktests = async () => {
+      setRecentBacktestsLoading(true);
+      setRecentBacktestsError(null);
+
+      try {
+        const response = await api.listBacktests({ limit: 8 });
+        if (!isMounted) {
+          return;
+        }
+
+        setRecentBacktests(response.backtests);
+      } catch (err) {
+        if (!isMounted) {
+          return;
+        }
+
+        setRecentBacktestsError(
+          err instanceof Error ? err.message : "Failed to load saved runs"
+        );
+      } finally {
+        if (isMounted) {
+          setRecentBacktestsLoading(false);
+        }
+      }
+    };
+
+    void loadRecentBacktests();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const buildCopilotPrompt = () => {
     return [
@@ -226,33 +306,60 @@ export default function App() {
     ].join("\n");
   };
 
+  const navigateToWorkspace = () => {
+    window.history.pushState({}, "", "/");
+    setRoute({ name: "workspace" });
+  };
+
+  const navigateToBacktest = (backtestId: string) => {
+    window.history.pushState({}, "", `/backtests/${backtestId}`);
+    setRoute({ name: "backtest", backtestId });
+  };
+
+  const refreshRecentBacktests = async () => {
+    setRecentBacktestsLoading(true);
+    setRecentBacktestsError(null);
+
+    try {
+      const response = await api.listBacktests({ limit: 8 });
+      setRecentBacktests(response.backtests);
+    } catch (err) {
+      setRecentBacktestsError(
+        err instanceof Error ? err.message : "Failed to load saved runs"
+      );
+    } finally {
+      setRecentBacktestsLoading(false);
+    }
+  };
+
+  const buildStrategyPayload = (): ApiStrategyCreateRequest => ({
+    ...(strategyId ? { strategyId } : {}),
+    ...strategyDefinition
+  });
+
+  const buildCandleRequest = () => ({
+    instrumentId,
+    interval,
+    from: dateRangeIso.from,
+    to: dateRangeIso.to,
+    env
+  });
+
+  const persistStrategyVersion = async () => {
+    const response = await api.createStrategy(buildStrategyPayload());
+    setStrategyId(response.strategyId);
+    setStrategyVersionId(response.strategyVersionId);
+    setVersion(response.version);
+    setSavedStrategyFingerprint(strategyFingerprint);
+    return response;
+  };
+
   const saveStrategy = async () => {
     setLoading(true);
     setError(null);
+
     try {
-      const strategyPayload = {
-        ...(strategyId ? { strategyId } : {}),
-        name: strategyName,
-        code,
-        params: {
-          kind: "ma_crossover" as const,
-          shortPeriod,
-          longPeriod,
-          positionSize
-        },
-        riskConfig: {
-          maxPositionNotional: 500_000,
-          killSwitchEnabled: true
-        }
-      };
-
-      const response = await api.createStrategy({
-        ...strategyPayload
-      });
-
-      setStrategyId(response.strategyId);
-      setStrategyVersionId(response.strategyVersionId);
-      setVersion(response.version);
+      await persistStrategyVersion();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save strategy");
       throw err;
@@ -264,6 +371,7 @@ export default function App() {
   const loadAccounts = async () => {
     setLoading(true);
     setError(null);
+
     try {
       const response = await api.listAccounts(env);
       setAccounts(response.accounts);
@@ -277,6 +385,7 @@ export default function App() {
   const loadCandles = async () => {
     setLoading(true);
     setError(null);
+
     try {
       const response = await api.loadCandles({
         instrumentId,
@@ -299,43 +408,25 @@ export default function App() {
 
     try {
       let versionId = strategyVersionId;
-      if (!versionId) {
-        const strategyPayload = {
-          ...(strategyId ? { strategyId } : {}),
-          name: strategyName,
-          code,
-          params: {
-            kind: "ma_crossover" as const,
-            shortPeriod,
-            longPeriod,
-            positionSize
-          }
-        };
-
-        const saveResponse = await api.createStrategy({
-          ...strategyPayload
-        });
-
-        setStrategyId(saveResponse.strategyId);
-        setStrategyVersionId(saveResponse.strategyVersionId);
-        setVersion(saveResponse.version);
+      if (!versionId || isStrategyDirty) {
+        const saveResponse = await persistStrategyVersion();
         versionId = saveResponse.strategyVersionId;
       }
 
+      const candleRequest = buildCandleRequest();
+
       const response = await api.runBacktest({
         strategyVersionId: versionId,
-        instrumentId,
-        interval,
-        from: dateRangeIso.from,
-        to: dateRangeIso.to,
+        ...candleRequest,
         feesBps,
         slippageBps,
         initialCash,
-        env
       });
 
       setCandlesCount(response.candlesCount);
       setResult(response);
+      setLastBacktestCandleRequest(candleRequest);
+      void refreshRecentBacktests();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to run backtest");
     } finally {
@@ -379,13 +470,24 @@ export default function App() {
     return response.instruments.map(toInstrumentOption);
   };
 
+  if (route.name === "backtest") {
+    return (
+      <BacktestRunPage
+        backtestId={route.backtestId}
+        onNavigateHome={navigateToWorkspace}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen text-neutral-100">
       <header className="sticky top-0 z-10 border-b border-neutral-800 bg-neutral-950/85 backdrop-blur">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
           <div>
             <h1 className="text-lg font-semibold tracking-tight">Invest Codex IDE by Codex</h1>
-            <p className="text-xs text-neutral-400">Phase 1 MVP: strategy versioning, candles ingestion, deterministic backtest</p>
+            <p className="text-xs text-neutral-400">
+              Phase 1 MVP: strategy versioning, saved backtest runs, deterministic reports
+            </p>
           </div>
           <div className="flex items-center gap-2">
             <label className="text-sm text-neutral-400">Env</label>
@@ -401,6 +503,7 @@ export default function App() {
               className="rounded bg-emerald-600 px-3 py-1 text-sm font-medium hover:bg-emerald-500 disabled:opacity-60"
               onClick={loadAccounts}
               disabled={loading}
+              type="button"
             >
               Load Accounts
             </button>
@@ -414,14 +517,19 @@ export default function App() {
             <h2 className="mb-2 text-sm font-semibold">Broker Accounts</h2>
             <div className="space-y-2 text-xs text-neutral-300">
               {accounts.length === 0 ? (
-                <p className="rounded border border-neutral-800 bg-surface-800 p-2 text-neutral-500">No accounts loaded</p>
+                <p className="rounded border border-neutral-800 bg-surface-800 p-2 text-neutral-500">
+                  No accounts loaded
+                </p>
               ) : (
                 accounts.map((account) => (
-                  <div key={account.accountId} className="rounded border border-neutral-800 bg-surface-800 p-2">
+                  <div
+                    key={account.accountId}
+                    className="rounded border border-neutral-800 bg-surface-800 p-2"
+                  >
                     <div className="font-medium">{account.name}</div>
                     <div className="text-neutral-400">{account.accountId}</div>
                     <div className="text-neutral-500">
-                      {account.type} · {account.status}
+                      {account.type} - {account.status}
                     </div>
                   </div>
                 ))
@@ -527,6 +635,7 @@ export default function App() {
                   className="rounded border border-cyan-500 bg-cyan-500/10 px-3 py-2 text-sm font-medium text-cyan-200 hover:bg-cyan-500/20 disabled:opacity-60"
                   onClick={loadCandles}
                   disabled={loading}
+                  type="button"
                 >
                   Sync Candles
                 </button>
@@ -534,6 +643,7 @@ export default function App() {
                   className="rounded bg-blue-600 px-3 py-2 text-sm font-semibold hover:bg-blue-500 disabled:opacity-60"
                   onClick={runBacktest}
                   disabled={loading}
+                  type="button"
                 >
                   Run Backtest
                 </button>
@@ -549,7 +659,9 @@ export default function App() {
               <div className="text-xs text-neutral-400">
                 {strategyVersionId ? (
                   <span>
-                    Strategy: <span className="text-neutral-200">{strategyId}</span> · v{version}
+                    Strategy: <span className="text-neutral-200">{strategyId}</span> - v
+                    {version}
+                    {isStrategyDirty ? " - unsaved changes" : ""}
                   </span>
                 ) : (
                   <span>Not saved yet</span>
@@ -605,16 +717,26 @@ export default function App() {
               onChange={(event) => setCode(event.target.value)}
             />
 
-            <div className="mt-3 flex items-center gap-2">
+            <div className="mt-3 flex flex-wrap items-center gap-2">
               <button
                 className="rounded border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm hover:bg-neutral-700 disabled:opacity-60"
                 onClick={saveStrategy}
                 disabled={loading}
+                type="button"
               >
                 Save Version
               </button>
               {candlesCount !== null ? (
                 <span className="text-xs text-neutral-400">Candles synced: {candlesCount}</span>
+              ) : null}
+              {result ? (
+                <button
+                  className="rounded border border-cyan-700 bg-cyan-500/10 px-3 py-2 text-sm text-cyan-200 hover:bg-cyan-500/20"
+                  onClick={() => navigateToBacktest(result.backtestId)}
+                  type="button"
+                >
+                  Open Saved Run
+                </button>
               ) : null}
             </div>
           </div>
@@ -624,7 +746,7 @@ export default function App() {
               <h2 className="text-sm font-semibold">AI Copilot</h2>
               <span className="text-xs text-neutral-500">Provider + model selectable</span>
             </div>
-
+            
             <div className="mb-3 grid grid-cols-1 gap-2 md:grid-cols-2">
               <label className="space-y-1">
                 <span className="text-sm text-neutral-400">Provider</span>
@@ -635,7 +757,11 @@ export default function App() {
                   disabled={llmLoading}
                 >
                   {llmOptions.map((option) => (
-                    <option key={option.provider} value={option.provider} disabled={!option.enabled}>
+                    <option
+                      key={option.provider}
+                      value={option.provider}
+                      disabled={!option.enabled}
+                    >
                       {option.provider}
                       {option.enabled ? "" : " (missing key)"}
                     </option>
@@ -686,6 +812,7 @@ export default function App() {
                 className="rounded border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm hover:bg-neutral-700 disabled:opacity-60"
                 onClick={() => setLlmPrompt(buildCopilotPrompt())}
                 disabled={llmLoading}
+                type="button"
               >
                 Use Strategy Context
               </button>
@@ -693,6 +820,7 @@ export default function App() {
                 className="rounded bg-emerald-600 px-3 py-2 text-sm font-semibold hover:bg-emerald-500 disabled:opacity-60"
                 onClick={runCopilot}
                 disabled={llmLoading}
+                type="button"
               >
                 {llmLoading ? "Asking..." : "Ask Copilot"}
               </button>
@@ -707,123 +835,146 @@ export default function App() {
           </div>
 
           <div className="rounded-xl border border-neutral-800 bg-surface-900/70 p-4">
-            <h2 className="mb-3 text-sm font-semibold">Backtest Report</h2>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-sm font-semibold">Backtest Report</h2>
+              {result ? (
+                <button
+                  className="text-xs text-cyan-300 hover:text-cyan-200"
+                  onClick={() => navigateToBacktest(result.backtestId)}
+                  type="button"
+                >
+                  View saved page
+                </button>
+              ) : null}
+            </div>
             {result ? (
               <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
-                  <Metric
-                    label="Return"
-                    value={`${result.report.metrics.returnPct.toFixed(2)}%`}
-                    hint={reportMetricHelp.Return}
-                  />
-                  <Metric
-                    label="Max DD"
-                    value={`${result.report.metrics.maxDrawdownPct.toFixed(2)}%`}
-                    hint={reportMetricHelp["Max DD"]}
-                  />
-                  <Metric
-                    label="Trades"
-                    value={String(result.report.metrics.tradesCount)}
-                    hint={reportMetricHelp.Trades}
-                  />
-                  <Metric
-                    label="Win Rate"
-                    value={`${result.report.metrics.winRatePct.toFixed(2)}%`}
-                    hint={reportMetricHelp["Win Rate"]}
-                  />
-                  <Metric
-                    label="End Equity"
-                    value={result.report.metrics.endEquity.toFixed(2)}
-                    hint={reportMetricHelp["End Equity"]}
-                  />
-                </div>
-
-                <div className="overflow-auto rounded border border-neutral-800">
-                  <table className="min-w-full text-left text-xs">
-                    <thead className="bg-surface-800 text-neutral-300">
-                      <tr>
-                        <th className="px-3 py-2">
-                          <HeaderWithHint label="Side" hint={tradeColumnHelp.Side} />
-                        </th>
-                        <th className="px-3 py-2">
-                          <HeaderWithHint label="Time" hint={tradeColumnHelp.Time} />
-                        </th>
-                        <th className="px-3 py-2">
-                          <HeaderWithHint label="Price" hint={tradeColumnHelp.Price} />
-                        </th>
-                        <th className="px-3 py-2">
-                          <HeaderWithHint label="Qty" hint={tradeColumnHelp.Qty} />
-                        </th>
-                        <th className="px-3 py-2">
-                          <HeaderWithHint label="Fee" hint={tradeColumnHelp.Fee} />
-                        </th>
-                        <th className="px-3 py-2">
-                          <HeaderWithHint label="PnL" hint={tradeColumnHelp.PnL} />
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {result.report.trades.slice(0, 30).map((trade, index) => (
-                        <tr key={`${trade.ts}-${index}`} className="border-t border-neutral-800">
-                          <td className={`px-3 py-2 ${trade.side === "BUY" ? "text-emerald-300" : "text-amber-300"}`}>{trade.side}</td>
-                          <td className="px-3 py-2 text-neutral-300">{new Date(trade.ts).toLocaleString()}</td>
-                          <td className="px-3 py-2">{trade.price.toFixed(4)}</td>
-                          <td className="px-3 py-2">{trade.qty}</td>
-                          <td className="px-3 py-2">{trade.fee.toFixed(4)}</td>
-                          <td className="px-3 py-2">{typeof trade.pnl === "number" ? trade.pnl.toFixed(4) : "-"}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <BacktestCandlesPanel
+                  title="Candles + Trades"
+                  subtitle="Current run chart with entry and exit markers from the trade log."
+                  request={lastBacktestCandleRequest}
+                  trades={result.report.trades}
+                />
+                <BacktestReportView report={result.report} />
               </div>
             ) : (
-              <p className="text-sm text-neutral-400">Run a backtest to see metrics and trade log.</p>
+              <p className="text-sm text-neutral-400">
+                Run a backtest to see metrics and trade log.
+              </p>
             )}
           </div>
 
-          {error ? <div className="rounded border border-red-800 bg-red-900/25 px-3 py-2 text-sm text-red-200">{error}</div> : null}
+          <div className="rounded-xl border border-neutral-800 bg-surface-900/70 p-4">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h2 className="text-sm font-semibold">Saved Runs</h2>
+              <button
+                className="rounded border border-neutral-700 bg-neutral-900 px-3 py-1 text-xs hover:bg-neutral-800 disabled:opacity-60"
+                onClick={refreshRecentBacktests}
+                disabled={recentBacktestsLoading}
+                type="button"
+              >
+                Refresh
+              </button>
+            </div>
+
+            {recentBacktestsError ? (
+              <div className="mb-3 rounded border border-red-800 bg-red-900/20 px-3 py-2 text-sm text-red-200">
+                {recentBacktestsError}
+              </div>
+            ) : null}
+
+            {recentBacktestsLoading && recentBacktests.length === 0 ? (
+              <p className="text-sm text-neutral-400">Loading saved runs...</p>
+            ) : recentBacktests.length === 0 ? (
+              <p className="text-sm text-neutral-400">No saved runs yet.</p>
+            ) : (
+              <div className="space-y-2">
+                {recentBacktests.map((backtest) => (
+                  <button
+                    key={backtest.backtestId}
+                    className="w-full rounded-lg border border-neutral-800 bg-surface-800 px-3 py-3 text-left transition hover:border-cyan-700 hover:bg-surface-800/80"
+                    onClick={() => navigateToBacktest(backtest.backtestId)}
+                    type="button"
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div>
+                        <div className="text-sm font-medium text-neutral-100">
+                          {backtest.strategy.name} - v{backtest.strategyVersion.version}
+                        </div>
+                        <div className="mt-1 text-xs text-neutral-400">
+                          {backtest.runParams.instrumentId} - {backtest.runParams.interval} -{" "}
+                          {formatDateTime(backtest.createdAt)}
+                        </div>
+                      </div>
+                      <div className="text-right text-xs text-neutral-400">
+                        <div>{backtest.status}</div>
+                        <div className="mt-1 text-neutral-500">
+                          {backtest.backtestId.slice(0, 8)}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-4">
+                      <SummaryPill
+                        label="Return"
+                        value={
+                          backtest.metrics
+                            ? `${backtest.metrics.returnPct.toFixed(2)}%`
+                            : "-"
+                        }
+                      />
+                      <SummaryPill
+                        label="Trades"
+                        value={
+                          backtest.metrics
+                            ? String(backtest.metrics.tradesCount)
+                            : "-"
+                        }
+                      />
+                      <SummaryPill
+                        label="End Equity"
+                        value={
+                          backtest.metrics
+                            ? backtest.metrics.endEquity.toFixed(2)
+                            : "-"
+                        }
+                      />
+                      <SummaryPill
+                        label="Candles"
+                        value={
+                          backtest.candlesCount === null
+                            ? "-"
+                            : String(backtest.candlesCount)
+                        }
+                      />
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {error ? (
+            <div className="rounded border border-red-800 bg-red-900/25 px-3 py-2 text-sm text-red-200">
+              {error}
+            </div>
+          ) : null}
         </section>
       </main>
     </div>
   );
 }
 
-function Metric({ label, value, hint }: { label: string; value: string; hint?: string }) {
+function SummaryPill({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded border border-neutral-800 bg-surface-800 px-3 py-2">
-      <div className="flex items-center gap-1 text-[11px] uppercase tracking-wide text-neutral-500">
-        <span>{label}</span>
-        {hint ? <InfoHint text={hint} /> : null}
-      </div>
+    <div className="rounded border border-neutral-700 bg-neutral-900/70 px-3 py-2">
+      <div className="text-[11px] uppercase tracking-wide text-neutral-500">{label}</div>
       <div className="mt-1 text-sm font-semibold text-neutral-100">{value}</div>
     </div>
   );
 }
 
-function HeaderWithHint({ label, hint }: { label: string; hint: string }) {
-  return (
-    <div className="flex items-center gap-1">
-      <span>{label}</span>
-      <InfoHint text={hint} />
-    </div>
-  );
-}
-
-function InfoHint({ text }: { text: string }) {
-  return (
-    <span className="group relative inline-flex items-center">
-      <span
-        className="inline-flex h-4 w-4 cursor-help items-center justify-center rounded-full border border-neutral-600 text-[10px] leading-none text-neutral-400 transition-colors group-hover:border-neutral-400 group-hover:text-neutral-200"
-        tabIndex={0}
-        aria-label={text}
-        title={text}
-      >
-        ?
-      </span>
-      <span className="pointer-events-none absolute bottom-[calc(100%+8px)] left-1/2 z-20 hidden w-56 -translate-x-1/2 rounded border border-neutral-700 bg-neutral-950 px-2 py-1 text-[11px] normal-case tracking-normal text-neutral-200 shadow-lg group-hover:block group-focus-within:block">
-        {text}
-      </span>
-    </span>
-  );
+function formatDateTime(value: string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
 }
