@@ -1,4 +1,6 @@
+import { useEffect, useMemo, useRef } from "react";
 import type { ApiBacktestReport } from "../api";
+import type { PlaybackTradeInsight } from "../lib/backtestPlayback";
 
 const reportMetricHelp = {
   Return: "Portfolio return for the full backtest period: (end equity - start equity) / start equity.",
@@ -14,19 +16,51 @@ const tradeColumnHelp = {
   Price: "Execution price after slippage is applied.",
   Qty: "Quantity bought or sold. Rounded down to fit available cash.",
   Fee: "Commission charged for this trade.",
-  PnL: "Realized profit or loss on SELL. BUY rows do not have realized PnL yet."
+  PnL: "Realized profit or loss on SELL. BUY rows do not have realized PnL yet.",
+  Trigger: "Why the trade happened. During playback the active decision row is highlighted here as well."
 } satisfies Record<string, string>;
 
 type BacktestReportViewProps = {
   report: ApiBacktestReport;
   tradeLimit?: number;
+  selectedTradeIndices?: number[];
+  tradeInsights?: Array<PlaybackTradeInsight | null>;
+  onSelectTradeIndex?: (tradeIndex: number) => void;
 };
 
 export function BacktestReportView({
   report,
-  tradeLimit = 30
+  tradeLimit = 30,
+  selectedTradeIndices = [],
+  tradeInsights = [],
+  onSelectTradeIndex
 }: BacktestReportViewProps) {
-  const visibleTrades = report.trades.slice(0, tradeLimit);
+  const rowRefs = useRef<Record<number, HTMLTableRowElement | null>>({});
+  const selectedTradeSet = useMemo(
+    () => new Set(selectedTradeIndices),
+    [selectedTradeIndices]
+  );
+  const effectiveLimit =
+    selectedTradeIndices.length > 0
+      ? Math.max(tradeLimit, Math.max(...selectedTradeIndices) + 5)
+      : tradeLimit;
+  const visibleTrades = report.trades.slice(0, effectiveLimit);
+
+  useEffect(() => {
+    if (selectedTradeIndices.length === 0) {
+      return;
+    }
+
+    const firstSelected = [...selectedTradeIndices].sort((left, right) => left - right)[0];
+    if (typeof firstSelected !== "number") {
+      return;
+    }
+
+    rowRefs.current[firstSelected]?.scrollIntoView({
+      block: "nearest",
+      behavior: "smooth"
+    });
+  }, [selectedTradeIndices]);
 
   return (
     <div className="space-y-4">
@@ -80,11 +114,23 @@ export function BacktestReportView({
               <th className="px-3 py-2">
                 <HeaderWithHint label="PnL" hint={tradeColumnHelp.PnL} />
               </th>
+              <th className="px-3 py-2">
+                <HeaderWithHint label="Trigger" hint={tradeColumnHelp.Trigger} />
+              </th>
             </tr>
           </thead>
           <tbody>
             {visibleTrades.map((trade, index) => (
-              <tr key={`${trade.ts}-${index}`} className="border-t border-neutral-800">
+              <tr
+                key={`${trade.ts}-${index}`}
+                ref={(node) => {
+                  rowRefs.current[index] = node;
+                }}
+                className={`border-t border-neutral-800 transition ${
+                  selectedTradeSet.has(index) ? "bg-cyan-500/10" : "hover:bg-surface-800/60"
+                } ${onSelectTradeIndex ? "cursor-pointer" : ""}`}
+                onClick={() => onSelectTradeIndex?.(index)}
+              >
                 <td
                   className={`px-3 py-2 ${
                     trade.side === "BUY" ? "text-emerald-300" : "text-amber-300"
@@ -100,6 +146,26 @@ export function BacktestReportView({
                 <td className="px-3 py-2">{trade.fee.toFixed(4)}</td>
                 <td className="px-3 py-2">
                   {typeof trade.pnl === "number" ? trade.pnl.toFixed(4) : "-"}
+                </td>
+                <td className="px-3 py-2 text-neutral-300">
+                  {tradeInsights[index] ? (
+                    <div>
+                      <div
+                        className={
+                          selectedTradeSet.has(index) ? "text-cyan-100" : "text-neutral-200"
+                        }
+                      >
+                        {tradeInsights[index]?.summary}
+                      </div>
+                      {selectedTradeSet.has(index) && tradeInsights[index]?.details[0] ? (
+                        <div className="mt-1 text-[11px] text-neutral-500">
+                          {tradeInsights[index]?.details[0]}
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : (
+                    "-"
+                  )}
                 </td>
               </tr>
             ))}
