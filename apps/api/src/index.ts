@@ -5,7 +5,7 @@ import { z } from "zod";
 import { config } from "./config.js";
 import { closeDb, initDb, pool } from "./db.js";
 import { runBacktest } from "./lib/backtest.js";
-import { CandleIngestionService } from "./lib/candles.js";
+import { CandleIngestionService, readCandles } from "./lib/candles.js";
 import { LlmService } from "./lib/llm.js";
 import { ensureFirstStrategy } from "./lib/seed.js";
 import { TbankClient } from "./lib/tbank.js";
@@ -55,7 +55,11 @@ const candlesQuerySchema = z.object({
   interval: z.enum(candleIntervals),
   from: z.string(),
   to: z.string(),
-  env: envSchema.default("sandbox")
+  env: envSchema.default("sandbox"),
+  cacheOnly: z
+    .enum(["true", "false"])
+    .optional()
+    .transform((value) => value === "true")
 });
 
 const instrumentsSearchQuerySchema = z.object({
@@ -277,13 +281,15 @@ app.get("/api/candles", async (req: Request, res: Response, next: NextFunction) 
       return;
     }
 
-    const candles = await candlesService.ensureCandles({
-      env: parsed.data.env,
-      instrumentId: parsed.data.instrumentId,
-      interval: parsed.data.interval,
-      from,
-      to
-    });
+    const candles = parsed.data.cacheOnly
+      ? await readCandles(parsed.data.instrumentId, parsed.data.interval, from, to)
+      : await candlesService.ensureCandles({
+          env: parsed.data.env,
+          instrumentId: parsed.data.instrumentId,
+          interval: parsed.data.interval,
+          from,
+          to
+        });
 
     res.json({ candles, interval: parsed.data.interval, count: candles.length });
   } catch (error) {

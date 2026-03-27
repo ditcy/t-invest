@@ -1,4 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent
+} from "react";
 import {
   api,
   type ApiBacktestTrade,
@@ -19,6 +25,13 @@ type DisplayCandle = ApiCandle & {
 
 type DisplayTrade = ApiBacktestTrade & {
   displayIndex: number;
+};
+
+type HoveredPoint = {
+  index: number;
+  x: number;
+  y: number;
+  price: number;
 };
 
 const chartHeight = 320;
@@ -54,12 +67,20 @@ export function BacktestCandlesPanel({
       setError(null);
 
       try {
-        const response = await api.loadCandles(request);
+        const response = await api.loadCandles({
+          ...request,
+          cacheOnly: true
+        });
         if (!isMounted) {
           return;
         }
 
         setCandles(response.candles);
+        setError(
+          response.candles.length === 0
+            ? "No cached candles were found for this run yet."
+            : null
+        );
       } catch (err) {
         if (!isMounted) {
           return;
@@ -186,6 +207,8 @@ function BacktestCandlesChart({
   candles: DisplayCandle[];
   trades: DisplayTrade[];
 }) {
+  const svgRef = useRef<SVGSVGElement | null>(null);
+  const [hoveredPoint, setHoveredPoint] = useState<HoveredPoint | null>(null);
   const slotWidth = candles.length > 120 ? 8 : 10;
   const chartWidth = Math.max(
     720,
@@ -212,14 +235,83 @@ function BacktestCandlesChart({
   const bodyWidth = Math.max(3, slotWidth * 0.62);
   const guideLines = 4;
   const labelStep = Math.max(1, Math.floor(candles.length / 4));
+  const hoveredCandle = hoveredPoint ? candles[hoveredPoint.index] : null;
+  const hoveredTrades = hoveredPoint
+    ? trades.filter((trade) => trade.displayIndex === hoveredPoint.index)
+    : [];
+  const tooltipLines = hoveredCandle
+    ? [
+        formatTooltipDate(hoveredCandle.ts),
+        `O ${hoveredCandle.open.toFixed(4)}  H ${hoveredCandle.high.toFixed(4)}`,
+        `L ${hoveredCandle.low.toFixed(4)}  C ${hoveredCandle.close.toFixed(4)}`,
+        hoveredCandle.sourceCount > 1
+          ? `${hoveredCandle.sourceCount} candles in bucket`
+          : "Single candle bucket",
+        ...hoveredTrades.slice(0, 2).map(
+          (trade) =>
+            `${trade.side} ${trade.qty} @ ${trade.price.toFixed(4)}${
+              typeof trade.pnl === "number" ? `  PnL ${trade.pnl.toFixed(2)}` : ""
+            }`
+        ),
+        ...(hoveredTrades.length > 2
+          ? [`+${hoveredTrades.length - 2} more trade(s)`]
+          : [])
+      ]
+    : [];
+  const tooltipWidth = 230;
+  const tooltipHeight = tooltipLines.length * 16 + 14;
+  const tooltipX = hoveredPoint
+    ? hoveredPoint.x > chartWidth - tooltipWidth - 16
+      ? hoveredPoint.x - tooltipWidth - 12
+      : hoveredPoint.x + 12
+    : 0;
+  const tooltipY = hoveredPoint
+    ? hoveredPoint.y < tooltipHeight + 16
+      ? hoveredPoint.y + 12
+      : hoveredPoint.y - tooltipHeight - 12
+    : 0;
+
+  const handleMouseMove = (event: ReactMouseEvent<SVGSVGElement>) => {
+    const rect = svgRef.current?.getBoundingClientRect();
+    if (!rect || candles.length === 0) {
+      return;
+    }
+
+    const rawX = ((event.clientX - rect.left) / rect.width) * chartWidth;
+    const rawY = ((event.clientY - rect.top) / rect.height) * chartHeight;
+    const clampedX = clamp(rawX, chartPadding.left, chartWidth - chartPadding.right);
+    const clampedY = clamp(
+      rawY,
+      chartPadding.top,
+      chartPadding.top + innerHeight
+    );
+    const nearestIndex = clamp(
+      Math.round((clampedX - chartPadding.left - slotWidth / 2) / slotWidth),
+      0,
+      candles.length - 1
+    );
+    const snappedX = xForIndex(nearestIndex);
+    const hoveredPrice =
+      maxPrice - ((clampedY - chartPadding.top) / innerHeight) * priceRange;
+
+    setHoveredPoint({
+      index: nearestIndex,
+      x: snappedX,
+      y: clampedY,
+      price: hoveredPrice
+    });
+  };
 
   return (
     <div className="overflow-x-auto rounded-lg border border-neutral-800 bg-[#0c1017] p-3">
       <svg
+        ref={svgRef}
         viewBox={`0 0 ${chartWidth} ${chartHeight}`}
         className="h-[340px] w-full min-w-[720px]"
         role="img"
         aria-label="Candlestick chart with trade markers"
+        onMouseMove={handleMouseMove}
+        onMouseLeave={() => setHoveredPoint(null)}
       >
         <rect x="0" y="0" width={chartWidth} height={chartHeight} fill="#0c1017" />
 
@@ -304,12 +396,87 @@ Price ${trade.price.toFixed(4)} Qty ${trade.qty}`}
                 y2={trade.side === "BUY" ? y + 14 : y - 14}
                 stroke={color}
                 strokeWidth="1.2"
-                opacity={0.85}
+                opacity={trade.displayIndex === hoveredPoint?.index ? 1 : 0.85}
               />
-              <polygon points={points} fill={color} stroke="#020617" strokeWidth="1" />
+              <polygon
+                points={points}
+                fill={color}
+                stroke="#020617"
+                strokeWidth={trade.displayIndex === hoveredPoint?.index ? "1.8" : "1"}
+              />
             </g>
           );
         })}
+
+        {hoveredPoint && hoveredCandle ? (
+          <g pointerEvents="none">
+            <line
+              x1={hoveredPoint.x}
+              y1={chartPadding.top}
+              x2={hoveredPoint.x}
+              y2={chartHeight - chartPadding.bottom}
+              stroke="#67e8f9"
+              strokeDasharray="5 5"
+              opacity="0.85"
+            />
+            <line
+              x1={chartPadding.left}
+              y1={hoveredPoint.y}
+              x2={chartWidth - chartPadding.right}
+              y2={hoveredPoint.y}
+              stroke="#67e8f9"
+              strokeDasharray="5 5"
+              opacity="0.45"
+            />
+            <circle
+              cx={hoveredPoint.x}
+              cy={yForPrice(hoveredCandle.close)}
+              r="3.5"
+              fill="#67e8f9"
+              stroke="#082f49"
+              strokeWidth="1.2"
+            />
+            <rect
+              x={chartWidth - 68}
+              y={hoveredPoint.y - 10}
+              width="58"
+              height="20"
+              rx="4"
+              fill="#082f49"
+              opacity="0.96"
+            />
+            <text
+              x={chartWidth - 39}
+              y={hoveredPoint.y + 4}
+              fill="#e0f2fe"
+              fontSize="11"
+              textAnchor="middle"
+            >
+              {hoveredPoint.price.toFixed(4)}
+            </text>
+            <rect
+              x={tooltipX}
+              y={tooltipY}
+              width={tooltipWidth}
+              height={tooltipHeight}
+              rx="8"
+              fill="#020617"
+              opacity="0.97"
+              stroke={hoveredTrades.length > 0 ? "#22c55e" : "#334155"}
+            />
+            {tooltipLines.map((line, index) => (
+              <text
+                key={`${line}-${index}`}
+                x={tooltipX + 10}
+                y={tooltipY + 18 + index * 16}
+                fill={index === 0 ? "#f8fafc" : hoveredTrades.length > 0 && index >= 4 ? "#bbf7d0" : "#cbd5e1"}
+                fontSize="11"
+              >
+                {line}
+              </text>
+            ))}
+          </g>
+        ) : null}
 
         {candles.map((candle, index) => {
           if (index !== 0 && index !== candles.length - 1 && index % labelStep !== 0) {
@@ -336,7 +503,7 @@ Price ${trade.price.toFixed(4)} Qty ${trade.qty}`}
       <div className="mt-3 flex flex-wrap items-center gap-4 text-xs text-neutral-400">
         <LegendDot color="#10b981" label="Bull candle / BUY" />
         <LegendDot color="#f59e0b" label="Bear candle / SELL" />
-        <span>Hover markers for time, price, and quantity.</span>
+        <span>Hover chart for crosshair, OHLC, and trade labels.</span>
       </div>
     </div>
   );
@@ -359,6 +526,15 @@ function formatAxisDate(value: string) {
   const month = `${date.getMonth() + 1}`.padStart(2, "0");
   const day = `${date.getDate()}`.padStart(2, "0");
   return `${day}.${month}`;
+}
+
+function formatTooltipDate(value: string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
 }
 
 function findNearestCandleIndex(candles: ApiCandle[], timestamp: string) {

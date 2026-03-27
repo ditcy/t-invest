@@ -58,6 +58,7 @@ export type ApiCandleRequest = {
   from: string;
   to: string;
   env: "sandbox" | "prod";
+  cacheOnly?: boolean;
 };
 
 export type ApiBacktestReport = {
@@ -156,7 +157,10 @@ const request = async <T>(url: string, init?: RequestInit): Promise<T> => {
   return (await response.json()) as T;
 };
 
-const withQuery = (url: string, params: Record<string, string | number | undefined>) => {
+const withQuery = (
+  url: string,
+  params: Record<string, string | number | boolean | undefined>
+) => {
   const search = new URLSearchParams();
 
   for (const [key, value] of Object.entries(params)) {
@@ -226,7 +230,8 @@ export const api = {
         interval: params.interval,
         from: params.from,
         to: params.to,
-        env: params.env
+        env: params.env,
+        cacheOnly: params.cacheOnly
       })
     ),
 

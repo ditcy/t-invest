@@ -21,6 +21,7 @@ Use these files first:
 - Deterministic MA crossover backtest with fees/slippage model
 - Persisted backtest runs with run parameters and a saved detail page per run
 - Candlestick chart for each run with BUY/SELL markers from the trade log
+- Split UX flow: separate pages for strategy workspace, backtest setup, runs history, and saved run detail
 - Accounts API (proxy to T-Bank users service)
 - T-Bank-backed instrument search with recent-memory dropdown
 - UI for saving strategy versions, syncing candles, running backtests, and querying LLM providers

@@ -44,11 +44,13 @@ NODE_TLS_REJECT_UNAUTHORIZED=0 npm run dev
 ## Quick Validation
 
 1. Open the UI.
-2. Click `Load Accounts`.
-3. In `Instrument Search`, type `sber` or `mvi`.
-4. Pick a suggestion from the T-Bank-backed dropdown.
-5. Click `Run Backtest`.
-6. Open the saved run from the `Saved Runs` block or the `View saved page` link.
+2. In `Workspace`, edit or save a strategy version.
+3. Open `Run Backtest`.
+4. Click `Load Accounts`.
+5. In `Instrument Search`, type `sber` or `mvi`.
+6. Pick a suggestion from the T-Bank-backed dropdown.
+7. Click `Run and Open Result`.
+8. Use `Runs History` to revisit older saved runs.
 
 ## Main Scripts
 
@@ -69,6 +71,8 @@ NODE_TLS_REJECT_UNAUTHORIZED=0 npm run dev
 ## Current Product Scope
 
 - Strategy workspace with saved versions
+- Separate page for backtest setup
+- Separate page for runs history
 - Deterministic MA crossover backtest
 - Saved backtest runs with a dedicated detail page for version, parameters, and report
 - Candlestick chart with trade markers on the current report and saved run page
