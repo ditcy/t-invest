@@ -1,5 +1,6 @@
 import { pool } from "../db.js";
 import type { Candle, CandleInterval } from "../types.js";
+import { logger } from "./logger.js";
 import { TbankClient } from "./tbank.js";
 
 const windowMsByInterval: Record<CandleInterval, number> = {
@@ -20,28 +21,83 @@ export class CandleIngestionService {
     from: Date;
     to: Date;
   }): Promise<Candle[]> {
-    const fromMs = input.from.getTime();
-    const toMs = input.to.getTime();
-    const windowMs = windowMsByInterval[input.interval];
+    const startedAt = Date.now();
+    const windows = buildCandleWindows({
+      interval: input.interval,
+      from: input.from,
+      to: input.to
+    });
+    let fetchedCandlesCount = 0;
 
-    let cursor = fromMs;
-    while (cursor < toMs) {
-      const windowFrom = new Date(cursor);
-      const windowTo = new Date(Math.min(cursor + windowMs, toMs));
-      const candles = await this.tbank.getCandles({
+    try {
+      for (const window of windows) {
+        const candles = await this.tbank.getCandles({
+          env: input.env,
+          instrumentId: input.instrumentId,
+          interval: input.interval,
+          from: window.from,
+          to: window.to
+        });
+        fetchedCandlesCount += candles.length;
+        await upsertCandles(input.instrumentId, input.interval, candles);
+      }
+
+      const storedCandles = await readCandles(
+        input.instrumentId,
+        input.interval,
+        input.from,
+        input.to
+      );
+
+      logger.info("candle_sync_completed", {
         env: input.env,
         instrumentId: input.instrumentId,
         interval: input.interval,
-        from: windowFrom,
-        to: windowTo
+        from: input.from.toISOString(),
+        to: input.to.toISOString(),
+        windows: windows.length,
+        fetchedCandlesCount,
+        storedCandlesCount: storedCandles.length,
+        durationMs: Date.now() - startedAt
       });
-      await upsertCandles(input.instrumentId, input.interval, candles);
-      cursor = windowTo.getTime();
-    }
 
-    return readCandles(input.instrumentId, input.interval, input.from, input.to);
+      return storedCandles;
+    } catch (error) {
+      logger.error("candle_sync_failed", error, {
+        env: input.env,
+        instrumentId: input.instrumentId,
+        interval: input.interval,
+        from: input.from.toISOString(),
+        to: input.to.toISOString(),
+        windows: windows.length,
+        fetchedCandlesCount,
+        durationMs: Date.now() - startedAt
+      });
+      throw error;
+    }
   }
 }
+
+export const buildCandleWindows = (input: {
+  interval: CandleInterval;
+  from: Date;
+  to: Date;
+}) => {
+  const windows: Array<{ from: Date; to: Date }> = [];
+  const fromMs = input.from.getTime();
+  const toMs = input.to.getTime();
+  const windowMs = windowMsByInterval[input.interval];
+
+  let cursor = fromMs;
+  while (cursor < toMs) {
+    const windowFrom = new Date(cursor);
+    const windowTo = new Date(Math.min(cursor + windowMs, toMs));
+    windows.push({ from: windowFrom, to: windowTo });
+    cursor = windowTo.getTime();
+  }
+
+  return windows;
+};
 
 const upsertCandles = async (
   instrumentId: string,

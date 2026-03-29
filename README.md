@@ -108,6 +108,12 @@ npm run dev:web
 
 4. Open the UI at `http://127.0.0.1:7001`.
 
+5. Optional verification:
+
+```bash
+npm run test
+```
+
 ## API endpoints
 
 - `GET /api/health`
@@ -123,6 +129,11 @@ npm run dev:web
 - `POST /api/backtests`
 - `GET /api/backtests?limit=8&strategyId=...&strategyVersionId=...`
 - `GET /api/backtests/:backtestId`
+
+## Observability
+
+- API emits lightweight structured logs for HTTP requests, candle sync runs, backtest completion/failure, and startup/shutdown events
+- This is intentionally a log-first baseline for local MVP work, not a full metrics/tracing stack yet
 
 ## Plan
 

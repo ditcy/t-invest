@@ -55,6 +55,7 @@ NODE_TLS_REJECT_UNAUTHORIZED=0 npm run dev
 ## Main Scripts
 
 - `npm run dev` starts API and web together and kills stale processes on known ports first
+- `npm run test` runs the current API test suite
 - `npm run dev:api` starts only the API
 - `npm run dev:web` starts only the frontend
 - `npm run typecheck` runs TypeScript checks for both apps
@@ -86,6 +87,7 @@ NODE_TLS_REJECT_UNAUTHORIZED=0 npm run dev
 - Candle sync from T-Bank REST proxy
 - Instrument search with recent-memory dropdown
 - LLM Copilot with `mock` and optional `claude` providers
+- Lightweight structured logs for requests, candle sync, and backtest runs
 
 For the current frontend behavior and review flow, see [`docs/ui-workflow.md`](ui-workflow.md).
 For route payloads, persistence shape, and repo structure, see [`docs/api-contract.md`](api-contract.md), [`docs/data-model.md`](data-model.md), and [`docs/architecture.md`](architecture.md).

@@ -7,6 +7,7 @@ import { closeDb, initDb, pool } from "./db.js";
 import { runBacktest } from "./lib/backtest.js";
 import { CandleIngestionService, readCandles } from "./lib/candles.js";
 import { LlmService } from "./lib/llm.js";
+import { logger } from "./lib/logger.js";
 import { ensureFirstStrategy } from "./lib/seed.js";
 import { TbankClient } from "./lib/tbank.js";
 import { candleIntervals, strategyKinds, type StrategyParams } from "./types.js";
@@ -18,6 +19,23 @@ const llmService = new LlmService();
 
 app.use(cors());
 app.use(express.json({ limit: "1mb" }));
+app.use((req: Request, res: Response, next: NextFunction) => {
+  const requestId = uuidv4();
+  const startedAt = Date.now();
+
+  res.setHeader("X-Request-Id", requestId);
+  res.on("finish", () => {
+    logger.info("http_request", {
+      requestId,
+      method: req.method,
+      path: req.originalUrl,
+      statusCode: res.statusCode,
+      durationMs: Date.now() - startedAt
+    });
+  });
+
+  next();
+});
 
 const envSchema = z.enum(["sandbox", "prod"]);
 
@@ -521,6 +539,8 @@ app.get("/api/backtests", async (req: Request, res: Response, next: NextFunction
 });
 
 app.post("/api/backtests", async (req: Request, res: Response, next: NextFunction) => {
+  const startedAt = Date.now();
+
   try {
     const payload = startBacktestSchema.parse(req.body);
     const from = new Date(payload.from);
@@ -631,7 +651,22 @@ app.post("/api/backtests", async (req: Request, res: Response, next: NextFunctio
       candlesCount: candles.length,
       report
     });
+
+    logger.info("backtest_completed", {
+      backtestId,
+      strategyVersionId: payload.strategyVersionId,
+      instrumentId: payload.instrumentId,
+      interval: payload.interval,
+      env: payload.env,
+      candlesCount: candles.length,
+      tradesCount: report.metrics.tradesCount,
+      returnPct: report.metrics.returnPct,
+      durationMs: Date.now() - startedAt
+    });
   } catch (error) {
+    logger.error("backtest_failed", error, {
+      durationMs: Date.now() - startedAt
+    });
     next(error);
   }
 });
@@ -749,7 +784,7 @@ app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
     return;
   }
 
-  console.error("API error", message);
+  logger.error("api_error", error, { message });
   res.status(500).json({ error: message });
 });
 
@@ -757,24 +792,28 @@ const start = async () => {
   await initDb();
   const seeded = await ensureFirstStrategy();
   if (seeded) {
-    console.log(
-      `Seeded first strategy: strategyId=${seeded.strategyId}, versionId=${seeded.strategyVersionId}`
-    );
+    logger.info("seeded_first_strategy", {
+      strategyId: seeded.strategyId,
+      strategyVersionId: seeded.strategyVersionId
+    });
   }
 
   app.listen(config.PORT, () => {
-    console.log(`API listening on :${config.PORT}`);
+    logger.info("api_started", {
+      port: config.PORT
+    });
   });
 };
 
 start().catch((error) => {
-  console.error("Failed to start API", error);
+  logger.error("api_start_failed", error);
   process.exit(1);
 });
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.on(signal, async () => {
     await closeDb();
+    logger.info("api_stopped", { signal });
     process.exit(0);
   });
 }

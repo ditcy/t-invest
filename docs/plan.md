@@ -27,12 +27,15 @@ Build a web AI-first trading IDE MVP based on `spec.md` with a secure backend th
 
 ### Phase 1: Foundation IDE + Backtest MVP
 
-Status: mostly implemented
+Status: complete for the current local MVP baseline
 
 Clearly in place:
 
 - Monorepo with `apps/api` and `apps/web`
 - Local run, typecheck, and build flows
+- Root `.env.example` template for onboarding
+- API test baseline for candle windowing and backtest determinism
+- Lightweight structured observability for HTTP requests, candle sync, and backtest execution
 - T-Bank-backed accounts and instrument search
 - Candle ingestion with local Postgres cache
 - Strategy version persistence with saved code, params, and risk config
@@ -48,7 +51,7 @@ Partially implemented or simplified versus the broader `spec.md`:
 - Backtests run synchronously in-request, not through a worker or job queue
 - Observability is still lightweight; there is no dedicated metrics/tracing layer yet
 - Auth/RBAC skeleton from the original spec is not present yet
-- Testing is still below the original phase target for ingestion and determinism coverage
+- Testing is still intentionally small and focused on the most failure-prone deterministic paths
 
 ### Phase 2: Live Trading MVP
 
@@ -86,9 +89,9 @@ What is still missing:
 Recommended order for the next serious milestones:
 
 1. Finish remaining Phase 1 hardening:
-- add tests for candle windowing, backtest determinism, and saved run API contracts
-- add lightweight observability for ingestion/backtest failures and durations
-- document known simplifications between saved strategy code and runtime execution
+- expand the new test baseline toward saved run API contracts and error paths
+- keep observability lightweight but start defining the metrics that Phase 2 will need
+- keep documentation explicit about the gap between saved strategy code and current runtime execution
 
 2. Prepare the bridge into Phase 2:
 - introduce persistence for live-trading entities such as `orders`, `fills`, and `audit_events`

@@ -14,7 +14,8 @@
     "dev:api": "npm run dev -w @invest/api",
     "dev:web": "npm run dev -w @invest/web",
     "build": "npm run build -w @invest/api && npm run build -w @invest/web",
-    "typecheck": "npm run typecheck -w @invest/api && npm run typecheck -w @invest/web"
+    "typecheck": "npm run typecheck -w @invest/api && npm run typecheck -w @invest/web",
+    "test": "npm run test -w @invest/api"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",

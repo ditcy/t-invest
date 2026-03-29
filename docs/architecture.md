@@ -52,6 +52,8 @@ Key modules:
   ensures an initial strategy exists in an empty database
 - `apps/api/src/lib/llm.ts`
   LLM provider abstraction used by the Copilot UI
+- `apps/api/src/lib/logger.ts`
+  lightweight structured logging for request, ingestion, and backtest events
 
 ## Candle Data Flow
 
@@ -182,3 +184,4 @@ These are UI conveniences only; the source of truth for strategies, candles, and
 - No background jobs or queue; backtests run synchronously inside the API request.
 - No auth or multi-user ownership model beyond the local placeholder user id.
 - No generic strategy execution sandbox yet; runtime behavior is fixed to MA crossover params.
+- Observability is still log-first; there is no full metrics/tracing pipeline yet.
