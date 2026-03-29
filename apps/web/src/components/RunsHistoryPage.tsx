@@ -95,8 +95,8 @@ export function RunsHistoryPage({
   };
 
   return (
-    <main className="mx-auto max-w-7xl space-y-4 p-4">
-      <section className="rounded-xl border border-neutral-800 bg-surface-900/70 p-4">
+    <main className="app-page space-y-[var(--ui-stack-gap)]">
+      <section className="app-card">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="flex items-center gap-2 text-base font-semibold">
@@ -134,7 +134,7 @@ export function RunsHistoryPage({
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-500" />
               <input
-                className="w-full rounded border border-neutral-700 bg-surface-800 py-2 pl-9 pr-3"
+                className="app-field pl-9"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Strategy, instrument, version ID, or run ID"
@@ -154,13 +154,13 @@ export function RunsHistoryPage({
       ) : null}
 
       {loading && backtests.length === 0 ? (
-        <div className="rounded-xl border border-neutral-800 bg-surface-900/70 p-4 text-sm text-neutral-400">
+        <div className="app-card text-sm text-neutral-400">
           Loading saved runs...
         </div>
       ) : null}
 
       {!loading && sortedBacktests.length === 0 ? (
-        <div className="rounded-xl border border-neutral-800 bg-surface-900/70 p-4 text-sm text-neutral-400">
+        <div className="app-card text-sm text-neutral-400">
           {query.trim() ? "No runs matched the current search." : "No saved runs yet."}
         </div>
       ) : null}
@@ -189,7 +189,7 @@ export function RunsHistoryPage({
                     currentSort={sort}
                     onSort={toggleSort}
                   />
-                  <th className="px-3 py-2 text-xs font-medium uppercase tracking-wide text-neutral-500">
+                  <th className="app-table-header text-xs font-medium uppercase tracking-wide text-neutral-500">
                     Interval
                   </th>
                   <SortableHeader
@@ -219,7 +219,7 @@ export function RunsHistoryPage({
                     currentSort={sort}
                     onSort={toggleSort}
                   />
-                  <th className="px-3 py-2 text-xs font-medium uppercase tracking-wide text-neutral-500">
+                  <th className="app-table-header text-xs font-medium uppercase tracking-wide text-neutral-500">
                     Run
                   </th>
                 </tr>
@@ -238,10 +238,10 @@ export function RunsHistoryPage({
                     }}
                     tabIndex={0}
                   >
-                    <td className="whitespace-nowrap px-3 py-2 text-xs text-neutral-400">
+                    <td className="app-table-cell whitespace-nowrap text-xs text-neutral-400">
                       {formatDateTime(backtest.createdAt)}
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="app-table-cell">
                       <div className="max-w-[240px] truncate font-medium" title={backtest.strategy.name}>
                         {backtest.strategy.name}
                       </div>
@@ -249,27 +249,27 @@ export function RunsHistoryPage({
                         v{backtest.strategyVersion.version}
                       </div>
                     </td>
-                    <td className="px-3 py-2 font-mono text-xs text-neutral-300">
+                    <td className="app-table-cell font-mono text-xs text-neutral-300">
                       {backtest.runParams.instrumentId}
                     </td>
-                    <td className="whitespace-nowrap px-3 py-2 text-xs text-neutral-400">
+                    <td className="app-table-cell whitespace-nowrap text-xs text-neutral-400">
                       {backtest.runParams.interval}
                     </td>
-                    <td className="whitespace-nowrap px-3 py-2 text-right font-medium">
+                    <td className="app-table-cell whitespace-nowrap text-right font-medium">
                       {formatMetric(backtest.metrics?.returnPct, "%")}
                     </td>
-                    <td className="whitespace-nowrap px-3 py-2 text-right">
+                    <td className="app-table-cell whitespace-nowrap text-right">
                       {typeof backtest.metrics?.tradesCount === "number"
                         ? backtest.metrics.tradesCount
                         : "-"}
                     </td>
-                    <td className="whitespace-nowrap px-3 py-2 text-right">
+                    <td className="app-table-cell whitespace-nowrap text-right">
                       {formatMetric(backtest.metrics?.endEquity, "")}
                     </td>
-                    <td className="whitespace-nowrap px-3 py-2 text-xs uppercase tracking-wide text-neutral-400">
+                    <td className="app-table-cell whitespace-nowrap text-xs uppercase tracking-wide text-neutral-400">
                       {backtest.status}
                     </td>
-                    <td className="px-3 py-2 font-mono text-xs text-neutral-500">
+                    <td className="app-table-cell font-mono text-xs text-neutral-500">
                       <div className="flex items-center justify-between gap-2">
                         <span>{backtest.backtestId.slice(0, 8)}</span>
                         <ChevronRight className="h-4 w-4 text-neutral-600" />
@@ -303,7 +303,7 @@ function SortableHeader({
   const Icon = !isActive ? ArrowUpDown : currentSort.direction === "asc" ? ArrowUp : ArrowDown;
 
   return (
-    <th className={`px-3 py-2 ${align === "right" ? "text-right" : "text-left"}`}>
+    <th className={`app-table-header ${align === "right" ? "text-right" : "text-left"}`}>
       <button
         className={`inline-flex items-center gap-1 text-xs font-medium uppercase tracking-wide transition hover:text-neutral-200 ${
           isActive ? "text-cyan-300" : "text-neutral-500"

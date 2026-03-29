@@ -80,10 +80,10 @@ export function BacktestSetupPage({
   onNavigateRuns
 }: BacktestSetupPageProps) {
   return (
-    <main className="mx-auto max-w-7xl space-y-4 p-4">
+    <main className="app-page space-y-[var(--ui-stack-gap)]">
       <section className="grid gap-4 lg:grid-cols-[0.95fr_1.05fr]">
         <div className="space-y-4">
-          <div className="rounded-xl border border-neutral-800 bg-surface-900/70 p-4">
+          <div className="app-card">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h2 className="text-base font-semibold">Run Backtest</h2>
@@ -113,7 +113,7 @@ export function BacktestSetupPage({
               <label className="space-y-1">
                 <span className="text-neutral-400">Environment</span>
                 <select
-                  className="w-full rounded border border-neutral-700 bg-surface-800 px-3 py-2"
+                  className="app-field"
                   value={env}
                   onChange={(event) => onEnvChange(event.target.value as Env)}
                 >
@@ -124,7 +124,7 @@ export function BacktestSetupPage({
               <div className="space-y-1">
                 <span className="text-neutral-400">Broker Accounts</span>
                 <button
-                  className="w-full rounded border border-neutral-700 bg-neutral-900 px-3 py-[10px] text-sm hover:bg-neutral-800 disabled:opacity-60"
+                  className="w-full rounded border border-neutral-700 bg-neutral-900 px-3 py-[calc(var(--ui-compact-pad-y)+2px)] text-sm hover:bg-neutral-800 disabled:opacity-60"
                   onClick={onLoadAccounts}
                   disabled={loading}
                   type="button"
@@ -135,7 +135,7 @@ export function BacktestSetupPage({
             </div>
           </div>
 
-          <div className="rounded-xl border border-neutral-800 bg-surface-900/70 p-4">
+          <div className="app-card">
             <h3 className="mb-3 text-sm font-semibold">Market Data</h3>
             <div className="grid grid-cols-1 gap-2 text-sm">
               <label className="space-y-1">
@@ -165,7 +165,7 @@ export function BacktestSetupPage({
                 <label className="space-y-1">
                   <span className="text-neutral-400">Interval</span>
                   <select
-                    className="w-full rounded border border-neutral-700 bg-surface-800 px-3 py-2"
+                    className="app-field"
                     value={interval}
                     onChange={(event) =>
                       onIntervalChange(event.target.value as BacktestSetupPageProps["interval"])
@@ -182,7 +182,7 @@ export function BacktestSetupPage({
                   <span className="text-neutral-400">From</span>
                   <input
                     type="datetime-local"
-                    className="w-full rounded border border-neutral-700 bg-surface-800 px-3 py-2"
+                    className="app-field"
                     value={from}
                     onChange={(event) => onFromChange(event.target.value)}
                   />
@@ -193,7 +193,7 @@ export function BacktestSetupPage({
                 <span className="text-neutral-400">To</span>
                 <input
                   type="datetime-local"
-                  className="w-full rounded border border-neutral-700 bg-surface-800 px-3 py-2"
+                  className="app-field"
                   value={to}
                   onChange={(event) => onToChange(event.target.value)}
                 />
@@ -201,14 +201,14 @@ export function BacktestSetupPage({
             </div>
           </div>
 
-          <div className="rounded-xl border border-neutral-800 bg-surface-900/70 p-4">
+          <div className="app-card">
             <h3 className="mb-3 text-sm font-semibold">Execution Model</h3>
             <div className="grid gap-2 md:grid-cols-3">
               <label className="space-y-1">
                 <span className="text-neutral-400">Fees (bps)</span>
                 <input
                   type="number"
-                  className="w-full rounded border border-neutral-700 bg-surface-800 px-3 py-2"
+                  className="app-field"
                   value={feesBps}
                   onChange={(event) => onFeesBpsChange(Number(event.target.value))}
                 />
@@ -217,7 +217,7 @@ export function BacktestSetupPage({
                 <span className="text-neutral-400">Slippage (bps)</span>
                 <input
                   type="number"
-                  className="w-full rounded border border-neutral-700 bg-surface-800 px-3 py-2"
+                  className="app-field"
                   value={slippageBps}
                   onChange={(event) => onSlippageBpsChange(Number(event.target.value))}
                 />
@@ -226,7 +226,7 @@ export function BacktestSetupPage({
                 <span className="text-neutral-400">Initial Cash</span>
                 <input
                   type="number"
-                  className="w-full rounded border border-neutral-700 bg-surface-800 px-3 py-2"
+                  className="app-field"
                   value={initialCash}
                   onChange={(event) => onInitialCashChange(Number(event.target.value))}
                 />
@@ -258,7 +258,7 @@ export function BacktestSetupPage({
         </div>
 
         <div className="space-y-4">
-          <div className="rounded-xl border border-neutral-800 bg-surface-900/70 p-4">
+          <div className="app-card">
             <h3 className="text-sm font-semibold">Strategy Snapshot</h3>
             <div className="mt-3 grid gap-2">
               <InfoRow label="Strategy" value={strategyName} />
@@ -282,18 +282,18 @@ export function BacktestSetupPage({
             </div>
           </div>
 
-          <div className="rounded-xl border border-neutral-800 bg-surface-900/70 p-4">
+          <div className="app-card">
             <h3 className="mb-3 text-sm font-semibold">Loaded Accounts</h3>
             <div className="space-y-2 text-xs text-neutral-300">
               {accounts.length === 0 ? (
-                <p className="rounded border border-neutral-800 bg-surface-800 p-2 text-neutral-500">
+                <p className="app-card-compact text-neutral-500">
                   No accounts loaded for the selected environment.
                 </p>
               ) : (
                 accounts.map((account) => (
                   <div
                     key={account.accountId}
-                    className="rounded border border-neutral-800 bg-surface-800 p-2"
+                    className="app-card-compact"
                   >
                     <div className="font-medium">{account.name}</div>
                     <div className="text-neutral-400">{account.accountId}</div>
@@ -313,7 +313,7 @@ export function BacktestSetupPage({
 
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded border border-neutral-800 bg-surface-800 px-3 py-2">
+    <div className="app-card-compact">
       <div className="text-[11px] uppercase tracking-wide text-neutral-500">{label}</div>
       <div className="mt-1 break-all text-sm text-neutral-100">{value}</div>
     </div>

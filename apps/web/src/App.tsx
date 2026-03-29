@@ -10,6 +10,11 @@ import {
 import { BacktestRunPage } from "./components/BacktestRunPage";
 import { BacktestSetupPage } from "./components/BacktestSetupPage";
 import { RunsHistoryPage } from "./components/RunsHistoryPage";
+import {
+  UiSettingsPanel,
+  type UiFontPreset,
+  type UiThemeMode
+} from "./components/UiSettingsPanel";
 import { WorkspacePage } from "./components/WorkspacePage";
 import type { SearchDropdownOption } from "./components/SearchDropdown";
 
@@ -41,6 +46,11 @@ const defaultRiskConfig = {
   maxPositionNotional: 500_000,
   killSwitchEnabled: true
 } satisfies Record<string, unknown>;
+
+const uiSettingsStorageKey = "invest.ui.settings";
+const defaultUiDensity = 0.88;
+const defaultUiTheme: UiThemeMode = "dark";
+const defaultUiFont: UiFontPreset = "plex";
 
 const daysAgoLocal = (days: number) => {
   const date = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
@@ -101,6 +111,10 @@ const fallbackInstrumentOption = (instrumentId: string): SearchDropdownOption =>
 
 export default function App() {
   const [route, setRoute] = useState<AppRoute>(() => parseRoute(window.location.pathname));
+  const [uiPanelOpen, setUiPanelOpen] = useState(false);
+  const [uiTheme, setUiTheme] = useState<UiThemeMode>(() => readUiSettings().theme);
+  const [uiDensity, setUiDensity] = useState<number>(() => readUiSettings().density);
+  const [uiFont, setUiFont] = useState<UiFontPreset>(() => readUiSettings().font);
 
   const [env, setEnv] = useState<Env>("sandbox");
   const [accounts, setAccounts] = useState<
@@ -255,6 +269,22 @@ export default function App() {
   useEffect(() => {
     void refreshRecentBacktests();
   }, []);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    root.dataset.theme = uiTheme;
+    root.style.setProperty("--ui-density", String(uiDensity));
+    root.style.setProperty("--app-font-family", getUiFontFamily(uiFont));
+
+    window.localStorage.setItem(
+      uiSettingsStorageKey,
+      JSON.stringify({
+        theme: uiTheme,
+        density: uiDensity,
+        font: uiFont
+      })
+    );
+  }, [uiDensity, uiFont, uiTheme]);
 
   const navigate = (nextRoute: AppRoute, pathname: string) => {
     window.history.pushState({}, "", pathname);
@@ -543,7 +573,7 @@ export default function App() {
   return (
     <div className="min-h-screen text-neutral-100">
       <header className="sticky top-0 z-10 border-b border-neutral-800 bg-neutral-950/85 backdrop-blur">
-        <div className="mx-auto max-w-7xl px-4 py-3">
+        <div className="mx-auto max-w-7xl px-[var(--ui-page-pad)] py-[calc(var(--ui-page-pad)-2px)]">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h1 className="text-lg font-semibold tracking-tight">Invest Codex IDE by Codex</h1>
@@ -573,7 +603,7 @@ export default function App() {
       </header>
 
       {error ? (
-        <div className="mx-auto max-w-7xl px-4 pt-4">
+        <div className="mx-auto max-w-7xl px-[var(--ui-page-pad)] pt-[var(--ui-page-pad)]">
           <div className="rounded border border-red-800 bg-red-900/25 px-3 py-2 text-sm text-red-200">
             {error}
           </div>
@@ -581,6 +611,22 @@ export default function App() {
       ) : null}
 
       {content}
+
+      <UiSettingsPanel
+        open={uiPanelOpen}
+        theme={uiTheme}
+        density={uiDensity}
+        font={uiFont}
+        onToggle={() => setUiPanelOpen((value) => !value)}
+        onThemeChange={setUiTheme}
+        onDensityChange={setUiDensity}
+        onFontChange={setUiFont}
+        onReset={() => {
+          setUiTheme(defaultUiTheme);
+          setUiDensity(defaultUiDensity);
+          setUiFont(defaultUiFont);
+        }}
+      />
     </div>
   );
 }
@@ -607,4 +653,61 @@ function NavButton({
       {label}
     </button>
   );
+}
+
+function readUiSettings() {
+  if (typeof window === "undefined") {
+    return {
+      theme: defaultUiTheme,
+      density: defaultUiDensity,
+      font: defaultUiFont
+    };
+  }
+
+  try {
+    const rawValue = window.localStorage.getItem(uiSettingsStorageKey);
+    if (!rawValue) {
+      return {
+        theme: defaultUiTheme,
+        density: defaultUiDensity,
+        font: defaultUiFont
+      };
+    }
+
+    const parsed = JSON.parse(rawValue) as {
+      theme?: unknown;
+      density?: unknown;
+      font?: unknown;
+    };
+
+    return {
+      theme: parsed.theme === "light" ? "light" : defaultUiTheme,
+      density:
+        typeof parsed.density === "number" && parsed.density >= 0.75 && parsed.density <= 1.15
+          ? parsed.density
+          : defaultUiDensity,
+      font:
+        parsed.font === "system" || parsed.font === "serif" || parsed.font === "plex"
+          ? parsed.font
+          : defaultUiFont
+    };
+  } catch {
+    return {
+      theme: defaultUiTheme,
+      density: defaultUiDensity,
+      font: defaultUiFont
+    };
+  }
+}
+
+function getUiFontFamily(font: UiFontPreset) {
+  switch (font) {
+    case "system":
+      return '"Segoe UI", "Helvetica Neue", Arial, sans-serif';
+    case "serif":
+      return 'Georgia, "Times New Roman", serif';
+    case "plex":
+    default:
+      return '"IBM Plex Sans", "Segoe UI", sans-serif';
+  }
 }

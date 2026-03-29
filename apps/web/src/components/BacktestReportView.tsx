@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useMemo } from "react";
 import type { ApiBacktestReport } from "../api";
 import type { PlaybackTradeInsight } from "../lib/backtestPlayback";
 
@@ -26,6 +26,7 @@ type BacktestReportViewProps = {
   selectedTradeIndices?: number[];
   tradeInsights?: Array<PlaybackTradeInsight | null>;
   onSelectTradeIndex?: (tradeIndex: number) => void;
+  tableContainerClassName?: string;
 };
 
 export function BacktestReportView({
@@ -33,9 +34,9 @@ export function BacktestReportView({
   tradeLimit = 30,
   selectedTradeIndices = [],
   tradeInsights = [],
-  onSelectTradeIndex
+  onSelectTradeIndex,
+  tableContainerClassName = ""
 }: BacktestReportViewProps) {
-  const rowRefs = useRef<Record<number, HTMLTableRowElement | null>>({});
   const selectedTradeSet = useMemo(
     () => new Set(selectedTradeIndices),
     [selectedTradeIndices]
@@ -45,22 +46,6 @@ export function BacktestReportView({
       ? Math.max(tradeLimit, Math.max(...selectedTradeIndices) + 5)
       : tradeLimit;
   const visibleTrades = report.trades.slice(0, effectiveLimit);
-
-  useEffect(() => {
-    if (selectedTradeIndices.length === 0) {
-      return;
-    }
-
-    const firstSelected = [...selectedTradeIndices].sort((left, right) => left - right)[0];
-    if (typeof firstSelected !== "number") {
-      return;
-    }
-
-    rowRefs.current[firstSelected]?.scrollIntoView({
-      block: "nearest",
-      behavior: "smooth"
-    });
-  }, [selectedTradeIndices]);
 
   return (
     <div className="space-y-4">
@@ -92,29 +77,31 @@ export function BacktestReportView({
         />
       </div>
 
-      <div className="overflow-auto rounded border border-neutral-800">
+      <div
+        className={`overflow-auto rounded border border-neutral-800 ${tableContainerClassName}`.trim()}
+      >
         <table className="min-w-full text-left text-xs">
           <thead className="bg-surface-800 text-neutral-300">
             <tr>
-              <th className="px-3 py-2">
+              <th className="app-table-header">
                 <HeaderWithHint label="Side" hint={tradeColumnHelp.Side} />
               </th>
-              <th className="px-3 py-2">
+              <th className="app-table-header">
                 <HeaderWithHint label="Time" hint={tradeColumnHelp.Time} />
               </th>
-              <th className="px-3 py-2">
+              <th className="app-table-header">
                 <HeaderWithHint label="Price" hint={tradeColumnHelp.Price} />
               </th>
-              <th className="px-3 py-2">
+              <th className="app-table-header">
                 <HeaderWithHint label="Qty" hint={tradeColumnHelp.Qty} />
               </th>
-              <th className="px-3 py-2">
+              <th className="app-table-header">
                 <HeaderWithHint label="Fee" hint={tradeColumnHelp.Fee} />
               </th>
-              <th className="px-3 py-2">
+              <th className="app-table-header">
                 <HeaderWithHint label="PnL" hint={tradeColumnHelp.PnL} />
               </th>
-              <th className="px-3 py-2">
+              <th className="app-table-header">
                 <HeaderWithHint label="Trigger" hint={tradeColumnHelp.Trigger} />
               </th>
             </tr>
@@ -123,31 +110,28 @@ export function BacktestReportView({
             {visibleTrades.map((trade, index) => (
               <tr
                 key={`${trade.ts}-${index}`}
-                ref={(node) => {
-                  rowRefs.current[index] = node;
-                }}
                 className={`border-t border-neutral-800 transition ${
                   selectedTradeSet.has(index) ? "bg-cyan-500/10" : "hover:bg-surface-800/60"
                 } ${onSelectTradeIndex ? "cursor-pointer" : ""}`}
                 onClick={() => onSelectTradeIndex?.(index)}
               >
                 <td
-                  className={`px-3 py-2 ${
+                  className={`app-table-cell ${
                     trade.side === "BUY" ? "text-emerald-300" : "text-amber-300"
                   }`}
                 >
                   {trade.side}
                 </td>
-                <td className="px-3 py-2 text-neutral-300">
+                <td className="app-table-cell text-neutral-300">
                   {new Date(trade.ts).toLocaleString()}
                 </td>
-                <td className="px-3 py-2">{trade.price.toFixed(4)}</td>
-                <td className="px-3 py-2">{trade.qty}</td>
-                <td className="px-3 py-2">{trade.fee.toFixed(4)}</td>
-                <td className="px-3 py-2">
+                <td className="app-table-cell">{trade.price.toFixed(4)}</td>
+                <td className="app-table-cell">{trade.qty}</td>
+                <td className="app-table-cell">{trade.fee.toFixed(4)}</td>
+                <td className="app-table-cell">
                   {typeof trade.pnl === "number" ? trade.pnl.toFixed(4) : "-"}
                 </td>
-                <td className="px-3 py-2 text-neutral-300">
+                <td className="app-table-cell text-neutral-300">
                   {tradeInsights[index] ? (
                     <div>
                       <div
@@ -184,7 +168,7 @@ export function BacktestReportView({
 
 function Metric({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
-    <div className="rounded border border-neutral-800 bg-surface-800 px-3 py-2">
+    <div className="app-card-compact">
       <div className="flex items-center gap-1 text-[11px] uppercase tracking-wide text-neutral-500">
         <span>{label}</span>
         {hint ? <InfoHint text={hint} /> : null}

@@ -27,8 +27,12 @@ import { BacktestCandlesPanel } from "./BacktestCandlesPanel";
 import { BacktestReportView } from "./BacktestReportView";
 
 const playbackSpeedStorageKey = "invest.backtest.playbackSpeed";
+const resultLayoutStorageKey = "invest.backtest.resultLayout";
 const defaultPlaybackSpeed = 1;
 const playbackSpeedOptions = [0.5, 1, 2, 4] as const;
+const resultLayoutOptions = ["stacked", "split"] as const;
+
+type ResultLayoutMode = (typeof resultLayoutOptions)[number];
 
 type BacktestRunPageProps = {
   backtestId: string;
@@ -50,6 +54,9 @@ export function BacktestRunPage({
   const [activeFrameIndex, setActiveFrameIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState(() => readPlaybackSpeed());
+  const [resultLayout, setResultLayout] = useState<ResultLayoutMode>(() =>
+    readResultLayout()
+  );
 
   const candleRequest = useMemo<ApiCandleRequest | null>(() => {
     if (!backtest?.runParams.env) {
@@ -207,6 +214,10 @@ export function BacktestRunPage({
   }, [playbackSpeed]);
 
   useEffect(() => {
+    window.localStorage.setItem(resultLayoutStorageKey, resultLayout);
+  }, [resultLayout]);
+
+  useEffect(() => {
     setActiveFrameIndex(playback.frames.length > 0 ? playback.frames.length - 1 : 0);
     setIsPlaying(false);
   }, [backtestId, playback.frames.length]);
@@ -291,8 +302,8 @@ export function BacktestRunPage({
   };
 
   return (
-    <main className="mx-auto max-w-7xl space-y-4 p-4">
-      <section className="rounded-xl border border-neutral-800 bg-surface-900/70 p-4">
+    <main className="app-page space-y-[var(--ui-stack-gap)]">
+      <section className="app-card">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-2 text-sm text-neutral-400">
@@ -328,13 +339,13 @@ export function BacktestRunPage({
       </section>
 
       {loading ? (
-        <div className="rounded-xl border border-neutral-800 bg-surface-900/70 p-4 text-sm text-neutral-400">
+        <div className="app-card text-sm text-neutral-400">
           Loading saved run...
         </div>
       ) : null}
 
       {error ? (
-        <div className="rounded-xl border border-red-800 bg-red-900/20 p-4 text-sm text-red-200">
+        <div className="rounded-xl border border-red-800 bg-red-900/20 p-[var(--ui-card-pad)] text-sm text-red-200">
           {error}
         </div>
       ) : null}
@@ -342,7 +353,7 @@ export function BacktestRunPage({
       {backtest && !loading ? (
         <>
           <section className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
-            <div className="rounded-xl border border-neutral-800 bg-surface-900/70 p-4">
+            <div className="app-card">
               <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <h2 className="text-base font-semibold text-neutral-100">
@@ -403,15 +414,15 @@ export function BacktestRunPage({
                   expanded={codeSnapshotExpanded}
                   onToggle={() => setCodeSnapshotExpanded((value) => !value)}
                 >
-                  <pre className="max-h-[420px] overflow-auto rounded-lg border border-neutral-800 bg-[#0c1017] p-3 text-sm text-neutral-200">
+                  <pre className="app-code-block max-h-[420px] overflow-auto text-sm text-neutral-200">
                     {backtest.strategyVersion.code}
                   </pre>
                 </CollapsibleSection>
               </div>
             </div>
 
-            <div className="space-y-4">
-              <div className="rounded-xl border border-neutral-800 bg-surface-900/70 p-4">
+            <div>
+              <div className="app-card">
                 <h2 className="mb-3 text-sm font-semibold">Run Parameters</h2>
                 <div className="grid gap-2 md:grid-cols-2">
                   <DetailItem
@@ -452,6 +463,61 @@ export function BacktestRunPage({
                   />
                 </div>
               </div>
+            </div>
+          </section>
+
+          <section className="app-card">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="text-sm font-semibold">Analysis Workspace</h2>
+                <p className="text-xs text-neutral-400">
+                  Choose how chart and trade journal are arranged while reviewing the run.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[11px] uppercase tracking-wide text-neutral-500">
+                  Layout
+                </span>
+                {resultLayoutOptions.map((layout) => {
+                  const active = resultLayout === layout;
+                  return (
+                    <button
+                      key={layout}
+                      className={`rounded border px-3 py-1.5 text-sm transition ${
+                        active
+                          ? "border-cyan-700 bg-cyan-500/10 text-cyan-100"
+                          : "border-neutral-700 bg-neutral-900 text-neutral-300 hover:bg-neutral-800"
+                      }`}
+                      onClick={() => setResultLayout(layout)}
+                      type="button"
+                    >
+                      {layout === "split" ? "Side by Side" : "Stacked"}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </section>
+
+          <section
+            className={
+              resultLayout === "split"
+                ? "grid gap-4 2xl:grid-cols-[minmax(0,1.18fr)_minmax(0,0.92fr)]"
+                : "space-y-4"
+            }
+          >
+            <div className="min-w-0 space-y-4">
+              <BacktestCandlesPanel
+                title="Price Action"
+                subtitle="Saved candle range for this run with entry and exit markers. Playback steps stay synced with the trade journal."
+                candles={candles}
+                loading={candlesLoading}
+                error={candlesError}
+                trades={backtest.report?.trades ?? []}
+                activeFrameIndex={activeFrame?.frameIndex ?? null}
+                activeTradeIndices={activeFrame?.selectedTradeIndices ?? []}
+                activeDecisionEvents={activeFrame?.decisionEvents ?? []}
+              />
 
               {backtest.report ? (
                 <PlaybackPanel
@@ -475,35 +541,26 @@ export function BacktestRunPage({
                   sliderValue={activeFrameIndex}
                 />
               ) : null}
+            </div>
 
-              <BacktestCandlesPanel
-                title="Price Action"
-                subtitle="Saved candle range for this run with entry and exit markers. Playback steps stay synced with the trade journal."
-                candles={candles}
-                loading={candlesLoading}
-                error={candlesError}
-                trades={backtest.report?.trades ?? []}
-                activeFrameIndex={activeFrame?.frameIndex ?? null}
-                activeTradeIndices={activeFrame?.selectedTradeIndices ?? []}
-                activeDecisionEvents={activeFrame?.decisionEvents ?? []}
-              />
-
-              <div className="rounded-xl border border-neutral-800 bg-surface-900/70 p-4">
-                <h2 className="mb-3 text-sm font-semibold">Run Outcome</h2>
-                {backtest.report ? (
-                  <BacktestReportView
-                    report={backtest.report}
-                    tradeLimit={50}
-                    selectedTradeIndices={activeFrame?.selectedTradeIndices ?? []}
-                    tradeInsights={playback.tradeInsights}
-                    onSelectTradeIndex={handleTradeSelect}
-                  />
-                ) : (
-                  <p className="text-sm text-neutral-400">
-                    {backtest.error || "No persisted report found for this run."}
-                  </p>
-                )}
-              </div>
+            <div className="min-w-0 app-card">
+              <h2 className="mb-3 text-sm font-semibold">Run Outcome</h2>
+              {backtest.report ? (
+                <BacktestReportView
+                  report={backtest.report}
+                  tradeLimit={50}
+                  selectedTradeIndices={activeFrame?.selectedTradeIndices ?? []}
+                  tradeInsights={playback.tradeInsights}
+                  onSelectTradeIndex={handleTradeSelect}
+                  tableContainerClassName={
+                    resultLayout === "split" ? "max-h-[620px]" : "max-h-[460px]"
+                  }
+                />
+              ) : (
+                <p className="text-sm text-neutral-400">
+                  {backtest.error || "No persisted report found for this run."}
+                </p>
+              )}
             </div>
           </section>
         </>
@@ -552,7 +609,7 @@ function PlaybackPanel({
   sliderValue: number;
 }) {
   return (
-    <div className="rounded-xl border border-neutral-800 bg-surface-900/70 p-4">
+    <div className="app-card">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-sm font-semibold">Playback</h2>
@@ -578,155 +635,159 @@ function PlaybackPanel({
       ) : null}
 
       {!loading && !error && activeFrame ? (
-        <div className="mt-4 space-y-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              className="inline-flex items-center gap-2 rounded border border-cyan-700 bg-cyan-500/10 px-3 py-2 text-sm text-cyan-100 transition hover:bg-cyan-500/20"
-              onClick={onPlayPause}
-              type="button"
-            >
-              {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-              <span>{isPlaying ? "Pause" : "Play"}</span>
-            </button>
-            <button
-              className="inline-flex items-center gap-2 rounded border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
-              onClick={onPrevious}
-              disabled={sliderValue <= 0}
-              type="button"
-            >
-              <SkipBack className="h-4 w-4" />
-              <span>Prev</span>
-            </button>
-            <button
-              className="inline-flex items-center gap-2 rounded border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
-              onClick={onNext}
-              disabled={sliderValue >= frameCount - 1}
-              type="button"
-            >
-              <SkipForward className="h-4 w-4" />
-              <span>Next</span>
-            </button>
-            <button
-              className="rounded border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
-              onClick={onPreviousDecision}
-              disabled={!hasPreviousDecision}
-              type="button"
-            >
-              Prev Signal
-            </button>
-            <button
-              className="rounded border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
-              onClick={onNextDecision}
-              disabled={!hasNextDecision}
-              type="button"
-            >
-              Next Signal
-            </button>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs uppercase tracking-wide text-neutral-500">Speed</span>
-            {playbackSpeedOptions.map((speed) => {
-              const active = speed === playbackSpeed;
-              return (
-                <button
-                  key={speed}
-                  className={`rounded border px-2.5 py-1.5 text-xs transition ${
-                    active
-                      ? "border-cyan-700 bg-cyan-500/10 text-cyan-100"
-                      : "border-neutral-700 bg-neutral-900 text-neutral-300 hover:bg-neutral-800"
-                  }`}
-                  onClick={() => onPlaybackSpeedChange(speed)}
-                  type="button"
-                >
-                  {formatPlaybackSpeed(speed)}
-                </button>
-              );
-            })}
-            <span className="text-xs text-neutral-500">
-              Saved locally for future sessions
-            </span>
-          </div>
-
-          <div className="space-y-2">
-            <input
-              className="w-full accent-cyan-400"
-              max={Math.max(frameCount - 1, 0)}
-              min={0}
-              onChange={onSliderChange}
-              type="range"
-              value={sliderValue}
-            />
-            <div className="flex flex-wrap justify-between gap-2 text-xs text-neutral-500">
-              <span>{formatStepRange(activeFrame)}</span>
-              <span>
-                {activeFrame.sourceCount > 1
-                  ? `${activeFrame.sourceCount} candles per step`
-                  : "1 candle per step"}
-                {frameSize > 1 ? ` / playback condensed from raw data` : ""}
-              </span>
-              <span>{decisionFrameCount} decision step(s) in this run</span>
+        <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1.18fr)_minmax(320px,0.82fr)]">
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                className="inline-flex items-center gap-2 rounded border border-cyan-700 bg-cyan-500/10 px-3 py-2 text-sm text-cyan-100 transition hover:bg-cyan-500/20"
+                onClick={onPlayPause}
+                type="button"
+              >
+                {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                <span>{isPlaying ? "Pause" : "Play"}</span>
+              </button>
+              <button
+                className="inline-flex items-center gap-2 rounded border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={onPrevious}
+                disabled={sliderValue <= 0}
+                type="button"
+              >
+                <SkipBack className="h-4 w-4" />
+                <span>Prev</span>
+              </button>
+              <button
+                className="inline-flex items-center gap-2 rounded border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={onNext}
+                disabled={sliderValue >= frameCount - 1}
+                type="button"
+              >
+                <SkipForward className="h-4 w-4" />
+                <span>Next</span>
+              </button>
+              <button
+                className="rounded border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={onPreviousDecision}
+                disabled={!hasPreviousDecision}
+                type="button"
+              >
+                Prev Signal
+              </button>
+              <button
+                className="rounded border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={onNextDecision}
+                disabled={!hasNextDecision}
+                type="button"
+              >
+                Next Signal
+              </button>
             </div>
-          </div>
 
-          <div className="grid gap-2 md:grid-cols-2">
-            <DetailItem label="Close" value={formatNumber(activeFrame.close, 4)} />
-            <DetailItem
-              label="Position Qty"
-              value={formatNumber(activeFrame.positionQty, 0)}
-            />
-            <DetailItem
-              label="Short MA"
-              value={formatNumber(activeFrame.shortMa, 4)}
-            />
-            <DetailItem label="Long MA" value={formatNumber(activeFrame.longMa, 4)} />
-            <DetailItem label="Cash" value={formatNumber(activeFrame.cash, 2)} />
-            <DetailItem
-              label="Decision Points"
-              value={String(activeFrame.decisionEvents.length)}
-            />
-          </div>
-
-          <div className="rounded-lg border border-neutral-800 bg-surface-800/60 p-3">
-            <div className="text-[11px] uppercase tracking-wide text-neutral-500">
-              Decision Inspector
-            </div>
-            {activeFrame.decisionEvents.length > 0 ? (
-              <div className="mt-2 space-y-3">
-                {activeFrame.decisionEvents.map((event, index) => (
-                  <div
-                    key={`${event.ts}-${event.side}-${index}`}
-                    className="rounded border border-neutral-800 bg-surface-900/60 p-3"
-                  >
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                          event.side === "BUY"
-                            ? "bg-emerald-500/10 text-emerald-200"
-                            : "bg-amber-500/10 text-amber-200"
-                        }`}
-                      >
-                        {event.side}
-                      </span>
-                      <span className="text-sm font-semibold text-neutral-100">
-                        {event.title}
-                      </span>
-                    </div>
-                    <p className="mt-2 text-sm text-neutral-200">{event.summary}</p>
-                    <div className="mt-2 space-y-1 text-xs text-neutral-400">
-                      {event.details.map((line) => (
-                        <div key={line}>{line}</div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
+            <div className="space-y-2">
+              <input
+                className="w-full accent-cyan-400"
+                max={Math.max(frameCount - 1, 0)}
+                min={0}
+                onChange={onSliderChange}
+                type="range"
+                value={sliderValue}
+              />
+              <div className="flex flex-wrap justify-between gap-2 text-xs text-neutral-500">
+                <span>{formatStepRange(activeFrame)}</span>
+                <span>
+                  {activeFrame.sourceCount > 1
+                    ? `${activeFrame.sourceCount} candles per step`
+                    : "1 candle per step"}
+                  {frameSize > 1 ? ` / playback condensed from raw data` : ""}
+                </span>
+                <span>{decisionFrameCount} decision step(s) in this run</span>
               </div>
-            ) : (
-              <p className="mt-2 text-sm text-neutral-400">
-                No trade fired on this step. Playback is following candle movement until the
-                next crossover event.
-              </p>
-            )}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs uppercase tracking-wide text-neutral-500">Speed</span>
+              {playbackSpeedOptions.map((speed) => {
+                const active = speed === playbackSpeed;
+                return (
+                  <button
+                    key={speed}
+                    className={`rounded border px-2.5 py-1.5 text-xs transition ${
+                      active
+                        ? "border-cyan-700 bg-cyan-500/10 text-cyan-100"
+                        : "border-neutral-700 bg-neutral-900 text-neutral-300 hover:bg-neutral-800"
+                    }`}
+                    onClick={() => onPlaybackSpeedChange(speed)}
+                    type="button"
+                  >
+                    {formatPlaybackSpeed(speed)}
+                  </button>
+                );
+              })}
+              <span className="text-xs text-neutral-500">
+                Saved locally for future sessions
+              </span>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div className="grid gap-2 sm:grid-cols-2">
+              <DetailItem label="Close" value={formatNumber(activeFrame.close, 4)} />
+              <DetailItem
+                label="Position Qty"
+                value={formatNumber(activeFrame.positionQty, 0)}
+              />
+              <DetailItem
+                label="Short MA"
+                value={formatNumber(activeFrame.shortMa, 4)}
+              />
+              <DetailItem label="Long MA" value={formatNumber(activeFrame.longMa, 4)} />
+              <DetailItem label="Cash" value={formatNumber(activeFrame.cash, 2)} />
+              <DetailItem
+                label="Decision Points"
+                value={String(activeFrame.decisionEvents.length)}
+              />
+            </div>
+
+            <div className="rounded-lg border border-neutral-800 bg-surface-800/60 p-[var(--ui-code-pad)]">
+              <div className="text-[11px] uppercase tracking-wide text-neutral-500">
+                Decision Inspector
+              </div>
+              {activeFrame.decisionEvents.length > 0 ? (
+                <div className="mt-2 space-y-3">
+                  {activeFrame.decisionEvents.map((event, index) => (
+                    <div
+                      key={`${event.ts}-${event.side}-${index}`}
+                      className="rounded border border-neutral-800 bg-surface-900/60 p-[var(--ui-code-pad)]"
+                    >
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                            event.side === "BUY"
+                              ? "bg-emerald-500/10 text-emerald-200"
+                              : "bg-amber-500/10 text-amber-200"
+                          }`}
+                        >
+                          {event.side}
+                        </span>
+                        <span className="text-sm font-semibold text-neutral-100">
+                          {event.title}
+                        </span>
+                      </div>
+                      <p className="mt-2 text-sm text-neutral-200">{event.summary}</p>
+                      <div className="mt-2 space-y-1 text-xs text-neutral-400">
+                        {event.details.map((line) => (
+                          <div key={line}>{line}</div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-2 text-sm text-neutral-400">
+                  No trade fired on this step. Playback is following candle movement until the
+                  next crossover event.
+                </p>
+              )}
+            </div>
           </div>
         </div>
       ) : null}
@@ -736,7 +797,7 @@ function PlaybackPanel({
 
 function DetailItem({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded border border-neutral-800 bg-surface-800 px-3 py-2">
+    <div className="app-card-compact">
       <div className="text-[11px] uppercase tracking-wide text-neutral-500">{label}</div>
       <div className="mt-1 break-all text-sm text-neutral-100">{value}</div>
     </div>
@@ -745,7 +806,7 @@ function DetailItem({ label, value }: { label: string; value: string }) {
 
 function JsonBlock({ value }: { value: Record<string, unknown> }) {
   return (
-    <pre className="overflow-auto rounded-lg border border-neutral-800 bg-[#0c1017] p-3 text-xs text-neutral-200">
+    <pre className="app-code-block overflow-auto text-xs text-neutral-200">
       {JSON.stringify(value, null, 2)}
     </pre>
   );
@@ -769,7 +830,7 @@ function CollapsibleSection({
   return (
     <div className="rounded-lg border border-neutral-800 bg-surface-800/50">
       <button
-        className="flex w-full items-center justify-between gap-3 px-3 py-3 text-left transition hover:bg-surface-800"
+        className="flex w-full items-center justify-between gap-3 px-[var(--ui-compact-pad-x)] py-[var(--ui-compact-pad-y)] text-left transition hover:bg-surface-800"
         onClick={onToggle}
         type="button"
       >
@@ -783,7 +844,9 @@ function CollapsibleSection({
         </div>
       </button>
 
-      {expanded ? <div className="border-t border-neutral-800 p-3">{children}</div> : null}
+      {expanded ? (
+        <div className="border-t border-neutral-800 p-[var(--ui-code-pad)]">{children}</div>
+      ) : null}
     </div>
   );
 }
@@ -841,4 +904,13 @@ function getPlaybackIntervalMs(speed: number) {
 
 function formatPlaybackSpeed(speed: number) {
   return `${speed}x`;
+}
+
+function readResultLayout(): ResultLayoutMode {
+  if (typeof window === "undefined") {
+    return "stacked";
+  }
+
+  const rawValue = window.localStorage.getItem(resultLayoutStorageKey);
+  return resultLayoutOptions.includes(rawValue as ResultLayoutMode) ? rawValue as ResultLayoutMode : "stacked";
 }

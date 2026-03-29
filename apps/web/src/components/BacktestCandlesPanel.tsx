@@ -128,7 +128,7 @@ export function BacktestCandlesPanel({
   }, [candles, trades]);
 
   return (
-    <div className="rounded-xl border border-neutral-800 bg-surface-900/70 p-4">
+    <div className="app-card">
       <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-sm font-semibold">{title}</h2>
@@ -148,7 +148,7 @@ export function BacktestCandlesPanel({
       {loading ? <p className="text-sm text-neutral-400">Loading candle chart...</p> : null}
 
       {error ? (
-        <div className="rounded border border-red-800 bg-red-900/20 px-3 py-2 text-sm text-red-200">
+        <div className="rounded border border-red-800 bg-red-900/20 px-[var(--ui-compact-pad-x)] py-[var(--ui-compact-pad-y)] text-sm text-red-200">
           {error}
         </div>
       ) : null}
@@ -295,7 +295,7 @@ function BacktestCandlesChart({
   };
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-neutral-800 bg-[#0c1017] p-3">
+    <div className="app-code-block overflow-x-auto">
       <svg
         ref={svgRef}
         viewBox={`0 0 ${chartWidth} ${chartHeight}`}
@@ -523,7 +523,7 @@ Price ${trade.price.toFixed(4)} Qty ${trade.qty}`}
         })}
       </svg>
 
-      <div className="mt-3 flex flex-wrap items-center gap-4 text-xs text-neutral-400">
+      <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-neutral-400">
         <LegendDot color="#10b981" label="Bull candle / BUY" />
         <LegendDot color="#f59e0b" label="Bear candle / SELL" />
         <LegendDot color="#67e8f9" label="Active playback step" />

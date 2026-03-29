@@ -70,9 +70,9 @@ export function WorkspacePage({
   onRunCopilot
 }: WorkspacePageProps) {
   return (
-    <main className="mx-auto max-w-7xl space-y-4 p-4">
+    <main className="app-page space-y-[var(--ui-stack-gap)]">
       <section className="grid gap-4 lg:grid-cols-[1.25fr_0.75fr]">
-        <div className="rounded-xl border border-neutral-800 bg-surface-900/70 p-4">
+        <div className="app-card">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-base font-semibold">Strategy Workspace</h2>
@@ -102,21 +102,21 @@ export function WorkspacePage({
           <label className="mb-3 block space-y-1">
             <span className="text-sm text-neutral-400">Strategy Name</span>
             <input
-              className="w-full rounded border border-neutral-700 bg-surface-800 px-3 py-2"
+              className="app-field"
               value={strategyName}
               onChange={(event) => onStrategyNameChange(event.target.value)}
             />
           </label>
 
           <textarea
-            className="h-[520px] w-full rounded-lg border border-neutral-800 bg-[#0c1017] p-3 font-mono text-sm text-neutral-200"
+            className="app-code-block h-[520px] w-full font-mono text-sm text-neutral-200"
             value={code}
             onChange={(event) => onCodeChange(event.target.value)}
           />
         </div>
 
         <div className="space-y-4">
-          <div className="rounded-xl border border-neutral-800 bg-surface-900/70 p-4">
+          <div className="app-card">
             <h3 className="text-sm font-semibold">Current Version</h3>
             <div className="mt-3 grid gap-2">
               <InfoRow label="Status" value={isStrategyDirty ? "Unsaved changes" : "Saved"} />
@@ -149,14 +149,14 @@ export function WorkspacePage({
             </div>
           </div>
 
-          <div className="rounded-xl border border-neutral-800 bg-surface-900/70 p-4">
+          <div className="app-card">
             <h3 className="text-sm font-semibold">Strategy Params</h3>
             <div className="mt-3 grid gap-2">
               <label className="space-y-1">
                 <span className="text-sm text-neutral-400">Short MA</span>
                 <input
                   type="number"
-                  className="w-full rounded border border-neutral-700 bg-surface-800 px-3 py-2"
+                  className="app-field"
                   value={shortPeriod}
                   onChange={(event) => onShortPeriodChange(Number(event.target.value))}
                 />
@@ -165,7 +165,7 @@ export function WorkspacePage({
                 <span className="text-sm text-neutral-400">Long MA</span>
                 <input
                   type="number"
-                  className="w-full rounded border border-neutral-700 bg-surface-800 px-3 py-2"
+                  className="app-field"
                   value={longPeriod}
                   onChange={(event) => onLongPeriodChange(Number(event.target.value))}
                 />
@@ -177,7 +177,7 @@ export function WorkspacePage({
                   step="0.1"
                   min="0.1"
                   max="1"
-                  className="w-full rounded border border-neutral-700 bg-surface-800 px-3 py-2"
+                  className="app-field"
                   value={positionSize}
                   onChange={(event) => onPositionSizeChange(Number(event.target.value))}
                 />
@@ -185,7 +185,7 @@ export function WorkspacePage({
             </div>
           </div>
 
-          <div className="rounded-xl border border-neutral-800 bg-surface-900/70 p-4">
+          <div className="app-card">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-sm font-semibold">AI Copilot</h3>
               <span className="text-xs text-neutral-500">Separated from run setup</span>
@@ -195,7 +195,7 @@ export function WorkspacePage({
               <label className="space-y-1">
                 <span className="text-sm text-neutral-400">Provider</span>
                 <select
-                  className="w-full rounded border border-neutral-700 bg-surface-800 px-3 py-2"
+                  className="app-field"
                   value={llmProvider}
                   onChange={(event) => onLlmProviderChange(event.target.value as LlmProvider)}
                   disabled={llmLoading}
@@ -216,7 +216,7 @@ export function WorkspacePage({
               <label className="space-y-1">
                 <span className="text-sm text-neutral-400">Model</span>
                 <select
-                  className="w-full rounded border border-neutral-700 bg-surface-800 px-3 py-2"
+                  className="app-field"
                   value={llmModel}
                   onChange={(event) => onLlmModelChange(event.target.value)}
                   disabled={llmLoading}
@@ -232,7 +232,7 @@ export function WorkspacePage({
               <label className="space-y-1">
                 <span className="text-sm text-neutral-400">System Prompt</span>
                 <textarea
-                  className="h-16 w-full rounded border border-neutral-700 bg-surface-800 px-3 py-2 text-sm"
+                  className="app-field h-16 text-sm"
                   value={llmSystemPrompt}
                   onChange={(event) => onLlmSystemPromptChange(event.target.value)}
                   disabled={llmLoading}
@@ -242,7 +242,7 @@ export function WorkspacePage({
               <label className="space-y-1">
                 <span className="text-sm text-neutral-400">Prompt</span>
                 <textarea
-                  className="h-28 w-full rounded border border-neutral-700 bg-surface-800 px-3 py-2 text-sm"
+                  className="app-field h-28 text-sm"
                   value={llmPrompt}
                   onChange={(event) => onLlmPromptChange(event.target.value)}
                   placeholder="Leave empty to auto-use current strategy context"
@@ -270,7 +270,7 @@ export function WorkspacePage({
               </button>
             </div>
 
-            <div className="mt-3 rounded border border-neutral-800 bg-[#0c1017] p-3">
+            <div className="app-code-block mt-3">
               <div className="mb-2 text-xs text-neutral-500">Response</div>
               <pre className="whitespace-pre-wrap text-sm text-neutral-200">
                 {llmResponse || "No response yet"}
@@ -285,7 +285,7 @@ export function WorkspacePage({
 
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded border border-neutral-800 bg-surface-800 px-3 py-2">
+    <div className="app-card-compact">
       <div className="text-[11px] uppercase tracking-wide text-neutral-500">{label}</div>
       <div className="mt-1 break-all text-sm text-neutral-100">{value}</div>
     </div>

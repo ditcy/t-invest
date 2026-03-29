@@ -246,7 +246,7 @@ export function SearchDropdown({
   return (
     <div ref={containerRef} className="relative">
       <input
-        className={`w-full border bg-surface-800 px-3 py-2 pr-10 transition-colors ${
+        className={`app-field border pr-10 transition-colors ${
           isOpen
             ? "rounded-t rounded-b-none border-cyan-400/70 shadow-[0_0_0_1px_rgba(34,211,238,0.12)]"
             : "rounded border-neutral-700"
@@ -272,7 +272,7 @@ export function SearchDropdown({
 
       {isOpen ? (
         <div className="absolute left-0 right-0 top-full z-30 rounded-b-xl border border-t-0 border-cyan-400/70 bg-[#0d1118] shadow-[0_22px_60px_rgba(0,0,0,0.55),0_0_0_1px_rgba(34,211,238,0.08)]">
-          <div className="border-b border-neutral-700 px-3 py-2 text-[11px] uppercase tracking-wide text-neutral-400">
+          <div className="border-b border-neutral-700 px-[var(--ui-compact-pad-x)] py-[var(--ui-compact-pad-y)] text-[11px] uppercase tracking-wide text-neutral-400">
             {statusText}
           </div>
 
@@ -282,7 +282,7 @@ export function SearchDropdown({
                 <button
                   key={option.id}
                   type="button"
-                  className={`block w-full px-3 py-2 text-left transition-colors ${
+                  className={`block w-full px-[var(--ui-compact-pad-x)] py-[var(--ui-compact-pad-y)] text-left transition-colors ${
                     index === highlightedIndex
                       ? "bg-cyan-400/14"
                       : "hover:bg-white/[0.04]"
@@ -298,7 +298,7 @@ export function SearchDropdown({
                 </button>
               ))
             ) : (
-              <div className="px-3 py-3 text-sm text-neutral-400">
+              <div className="px-[var(--ui-compact-pad-x)] py-[var(--ui-card-pad)] text-sm text-neutral-400">
                 {isLoading ? "Searching..." : noResultsText}
               </div>
             )}
