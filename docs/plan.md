@@ -23,6 +23,83 @@ Build a web AI-first trading IDE MVP based on `spec.md` with a secure backend th
 - Explainability and risk warnings.
 - Optional predictive models and shadow rollout.
 
+## Current Status Against Global Plan
+
+### Phase 1: Foundation IDE + Backtest MVP
+
+Status: mostly implemented
+
+Clearly in place:
+
+- Monorepo with `apps/api` and `apps/web`
+- Local run, typecheck, and build flows
+- T-Bank-backed accounts and instrument search
+- Candle ingestion with local Postgres cache
+- Strategy version persistence with saved code, params, and risk config
+- Deterministic MA crossover backtest engine with fees and slippage
+- Saved backtest runs with detail page and persisted report payload
+- Frontend split into workspace, run setup, history, and saved result review
+- Candlestick chart, trade markers, playback, and decision explanations
+- Optional LLM Copilot integration with `mock` and `claude`
+
+Partially implemented or simplified versus the broader `spec.md`:
+
+- Strategy authoring is versioned in TypeScript, but runtime still executes only saved MA params instead of arbitrary strategy code
+- Backtests run synchronously in-request, not through a worker or job queue
+- Observability is still lightweight; there is no dedicated metrics/tracing layer yet
+- Auth/RBAC skeleton from the original spec is not present yet
+- Testing is still below the original phase target for ingestion and determinism coverage
+
+### Phase 2: Live Trading MVP
+
+Status: not started
+
+Missing major deliverables:
+
+- OMS with persistent idempotency keys
+- Place/cancel/replace execution flow
+- Streaming order events and live monitor UI
+- Reconciliation loop
+- Audit trail
+- Risk controls and live kill switch
+
+### Phase 3: AI-First Layer
+
+Status: started only at the foundation level
+
+What exists:
+
+- Copilot entrypoint in the workspace
+- Saved result review UX that already supports decision explanations for the deterministic strategy model
+
+What is still missing:
+
+- AI-assisted strategy generation/editing with stronger guardrails
+- Backtest explanation endpoint/service beyond local deterministic playback reasoning
+- Explicit risk warnings flow
+- Predictive model training/inference pipeline
+- Explainability/drift monitoring
+- Shadow rollout and safety harness testing
+
+## Recommended Next Steps
+
+Recommended order for the next serious milestones:
+
+1. Finish remaining Phase 1 hardening:
+- add tests for candle windowing, backtest determinism, and saved run API contracts
+- add lightweight observability for ingestion/backtest failures and durations
+- document known simplifications between saved strategy code and runtime execution
+
+2. Prepare the bridge into Phase 2:
+- introduce persistence for live-trading entities such as `orders`, `fills`, and `audit_events`
+- define the OMS API surface and idempotency model before UI work starts
+- choose the streaming approach for market/order events
+
+3. Expand the AI layer only after the execution baseline is safer:
+- keep Copilot scoped to authoring/review
+- add explicit risk-warning UX and explanation services on top of saved run data
+- defer predictive-model work until Phase 2 execution paths are stable
+
 ## Current MVP Scope Decisions
 - Environment support: sandbox/prod via backend env vars.
 - Database: Postgres with minimal schema bootstrap on API start.
