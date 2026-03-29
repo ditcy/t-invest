@@ -94,5 +94,6 @@ NODE_TLS_REJECT_UNAUTHORIZED=0 npm run dev
 
 - Prefer small, surgical changes
 - Keep root docs in sync when changing ports, env vars, startup flow, or architecture
+- After finishing code changes, always document them before closing the task: update existing docs and add starter docs for new flows/features when needed
 - If changing search/backtest behavior, update the user-facing docs
 - Do not commit secrets or copy `.env` values into tracked files

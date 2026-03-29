@@ -64,6 +64,10 @@ NODE_TLS_REJECT_UNAUTHORIZED=0 npm run dev
 
 - `apps/api` Express + TypeScript API
 - `apps/web` React + Vite frontend
+- `docs/ui-workflow.md` current frontend workflow and result-review UX
+- `docs/api-contract.md` current API routes and payloads
+- `docs/data-model.md` current database model and stored JSON shapes
+- `docs/architecture.md` current backend/frontend structure and runtime flow
 - `docs/plan.md` original implementation plan
 - `spec.md` product and technical spec
 - `AGENTS.md` Codex-specific repo guidance
@@ -76,9 +80,15 @@ NODE_TLS_REJECT_UNAUTHORIZED=0 npm run dev
 - Deterministic MA crossover backtest
 - Saved backtest runs with a dedicated detail page for version, parameters, and report
 - Candlestick chart with trade markers on the current report and saved run page
+- Playback controls for saved runs with decision explanations and speed control
+- Split review layout with stacked/side-by-side analysis workspace
+- Global UI settings drawer for density, font, and dark/light theme
 - Candle sync from T-Bank REST proxy
 - Instrument search with recent-memory dropdown
 - LLM Copilot with `mock` and optional `claude` providers
+
+For the current frontend behavior and review flow, see [`docs/ui-workflow.md`](ui-workflow.md).
+For route payloads, persistence shape, and repo structure, see [`docs/api-contract.md`](api-contract.md), [`docs/data-model.md`](data-model.md), and [`docs/architecture.md`](architecture.md).
 
 ## Known Constraints
 

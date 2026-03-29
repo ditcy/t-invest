@@ -7,6 +7,10 @@ Phase-1 MVP from `spec.md`: strategy workspace, T-Bank candle ingestion, instrum
 Use these files first:
 
 - [`docs/codex-setup.md`](docs/codex-setup.md) machine setup and first run
+- [`docs/ui-workflow.md`](docs/ui-workflow.md) current frontend workflow and review UX
+- [`docs/api-contract.md`](docs/api-contract.md) current HTTP endpoints and payloads
+- [`docs/data-model.md`](docs/data-model.md) current Postgres tables and JSON payloads
+- [`docs/architecture.md`](docs/architecture.md) current system structure and data flow
 - [`AGENTS.md`](AGENTS.md) repo-specific guidance for Codex
 - [`.env.example`](.env.example) safe environment template
 
@@ -21,6 +25,9 @@ Use these files first:
 - Deterministic MA crossover backtest with fees/slippage model
 - Persisted backtest runs with run parameters and a saved detail page per run
 - Candlestick chart for each run with BUY/SELL markers from the trade log
+- Playback controls for saved runs with signal stepping, speed selection, and decision explanations
+- Analysis workspace with stacked or side-by-side chart/table review
+- Global UI settings panel for spacing, font, and dark/light theme
 - Split UX flow: separate pages for strategy workspace, backtest setup, runs history, and saved run detail
 - Accounts API (proxy to T-Bank users service)
 - T-Bank-backed instrument search with recent-memory dropdown
@@ -120,3 +127,13 @@ npm run dev:web
 ## Plan
 
 Detailed phase plan: [`docs/plan.md`](docs/plan.md)
+
+## UI docs
+
+- [`docs/ui-workflow.md`](docs/ui-workflow.md) current frontend pages, playback, history, and UI settings
+
+## Technical docs
+
+- [`docs/api-contract.md`](docs/api-contract.md) API routes, parameters, response shapes, and limits
+- [`docs/data-model.md`](docs/data-model.md) tables, relationships, and persisted JSON shapes
+- [`docs/architecture.md`](docs/architecture.md) backend/frontend structure, data flow, and current constraints
